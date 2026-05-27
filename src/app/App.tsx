@@ -1,716 +1,444 @@
-import { useState } from "react";
-import { 
-  Home, 
-  Dumbbell, 
-  Trophy, 
-  Users, 
-  Calendar,
-  Clock,
-  Flame,
-  Target,
-  TrendingUp,
-  Search,
-  UserPlus,
-  ChevronRight,
-  Zap,
-  Timer,
-  Activity
-} from "lucide-react";
-import { motion } from "motion/react";
+import { useMemo, useState } from "react";
+import {
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 type Screen = "home" | "workout" | "ranking" | "friends";
 type RankingTab = "streak" | "total";
 type WorkoutType = "single" | "intercalated";
+
+type LeaderboardUser = {
+  rank: number;
+  name: string;
+  avatar: string;
+  streak: number;
+  total: number;
+  isCurrentUser?: boolean;
+};
+
+const leaderboardStreak: LeaderboardUser[] = [
+  { rank: 1, name: "Saitama", avatar: "🟡", streak: 1095, total: 438000 },
+  { rank: 2, name: "Genos", avatar: "⚙️", streak: 365, total: 146000 },
+  { rank: 3, name: "You", avatar: "💪", streak: 127, total: 50800, isCurrentUser: true },
+  { rank: 4, name: "Mumen Rider", avatar: "🚴", streak: 89, total: 35600 },
+  { rank: 5, name: "Tank Top", avatar: "👕", streak: 67, total: 26800 },
+];
+
+const leaderboardTotal: LeaderboardUser[] = [
+  { rank: 1, name: "Saitama", avatar: "🟡", streak: 1095, total: 438000 },
+  { rank: 2, name: "Genos", avatar: "⚙️", streak: 365, total: 146000 },
+  { rank: 3, name: "Mumen Rider", avatar: "🚴", streak: 89, total: 89200 },
+  { rank: 4, name: "You", avatar: "💪", streak: 127, total: 50800, isCurrentUser: true },
+  { rank: 5, name: "Tank Top", avatar: "👕", streak: 67, total: 26800 },
+];
+
+const friends = [
+  { name: "Genos", avatar: "⚙️", progress: 100, status: "Completed today" },
+  { name: "Mumen Rider", avatar: "🚴", progress: 50, status: "In progress" },
+  { name: "Tank Top", avatar: "👕", progress: 25, status: "Just started" },
+  { name: "Speed-o'-Sound", avatar: "⚡", progress: 0, status: "Not started" },
+];
+
+const exercises = [
+  { label: "Push-ups", value: "75/100" },
+  { label: "Sit-ups", value: "100/100", completed: true },
+  { label: "Squats", value: "50/100" },
+  { label: "Run", value: "7.5/10 km" },
+];
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>("home");
   const [rankingTab, setRankingTab] = useState<RankingTab>("streak");
   const [workoutFilter, setWorkoutFilter] = useState<WorkoutType>("single");
 
-  // Mock data
-  const startDate = new Date("2024-01-01");
-  const endDate = new Date("2027-01-01");
-  const today = new Date();
-  const totalDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-  const daysPassed = Math.floor((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-  const progress = (daysPassed / totalDays) * 100;
-  const todayProgress = 75;
+  const challenge = useMemo(() => {
+    const startDate = new Date("2024-01-01T00:00:00");
+    const endDate = new Date("2027-01-01T00:00:00");
+    const today = new Date();
+    const totalDays = Math.max(1, Math.floor((endDate.getTime() - startDate.getTime()) / 86400000));
+    const daysPassed = Math.min(totalDays, Math.max(0, Math.floor((today.getTime() - startDate.getTime()) / 86400000)));
+    const progress = Math.round((daysPassed / totalDays) * 100);
 
-  const leaderboardStreak = [
-    { rank: 1, name: "Saitama", avatar: "🟡", streak: 1095, total: 438000 },
-    { rank: 2, name: "Genos", avatar: "⚙️", streak: 365, total: 146000 },
-    { rank: 3, name: "You", avatar: "💪", streak: 127, total: 50800, isCurrentUser: true },
-    { rank: 4, name: "Mumen Rider", avatar: "🚴", streak: 89, total: 35600 },
-    { rank: 5, name: "Tank Top", avatar: "👕", streak: 67, total: 26800 },
-  ];
+    return {
+      startDate: startDate.toLocaleDateString("pt-BR"),
+      endDate: endDate.toLocaleDateString("pt-BR"),
+      daysPassed,
+      progress,
+    };
+  }, []);
 
-  const leaderboardTotal = [
-    { rank: 1, name: "Saitama", avatar: "🟡", streak: 1095, total: 438000 },
-    { rank: 2, name: "Genos", avatar: "⚙️", streak: 365, total: 146000 },
-    { rank: 3, name: "Mumen Rider", avatar: "🚴", streak: 89, total: 89200 },
-    { rank: 4, name: "You", avatar: "💪", streak: 127, total: 50800, isCurrentUser: true },
-    { rank: 5, name: "Tank Top", avatar: "👕", streak: 67, total: 26800 },
-  ];
-
-  const friends = [
-    { name: "Genos", avatar: "⚙️", progress: 100, status: "Completed today" },
-    { name: "Mumen Rider", avatar: "🚴", progress: 50, status: "In progress" },
-    { name: "Tank Top", avatar: "👕", progress: 25, status: "Just started" },
-    { name: "Speed-o'-Sound", avatar: "⚡", progress: 0, status: "Not started" },
-  ];
+  const renderProgressBar = (value: number, large = false) => (
+    <View style={[styles.progressTrack, large && styles.progressTrackLarge]}>
+      <View style={[styles.progressFill, { width: `${Math.max(0, Math.min(100, value))}%` }]} />
+    </View>
+  );
 
   const renderHomeScreen = () => (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex-1 overflow-y-auto pb-24"
-    >
-      {/* Hero Banner */}
-      <div className="relative h-56 bg-gradient-to-br from-secondary via-secondary/80 to-primary/30 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(255,214,0,0.2),transparent_50%)]" />
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl" />
-        <div className="relative h-full flex flex-col justify-center px-6">
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.2, type: "spring" }}
-            className="text-7xl mb-2"
-          >
-            💪
-          </motion.div>
-          <h1 className="text-5xl font-bold tracking-wider text-white mb-2" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
-            BREAK YOUR
-          </h1>
-          <h1 className="text-5xl font-bold tracking-wider text-primary mb-1" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
-            LIMITER
-          </h1>
-          <p className="text-white/80 text-sm font-medium">Saitama's 3-Year Challenge</p>
-        </div>
-      </div>
+    <ScrollView contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
+      <View style={styles.hero}>
+        <Text style={styles.heroEmoji}>💪</Text>
+        <Text style={styles.heroTitle}>BREAK YOUR</Text>
+        <Text style={styles.heroTitleAccent}>LIMITER</Text>
+        <Text style={styles.heroSubtitle}>Saitama's 3-Year Challenge</Text>
+      </View>
 
-      {/* Progress Section */}
-      <div className="px-6 py-6 space-y-6">
-        {/* Challenge Timeline */}
-        <div className="bg-card rounded-2xl p-6 border border-border/50">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-primary" />
-              <h3 className="text-lg font-bold">Challenge Progress</h3>
-            </div>
-            <span className="text-sm text-muted-foreground">{Math.round(progress)}%</span>
-          </div>
+      <View style={styles.card}>
+        <View style={styles.rowBetween}>
+          <Text style={styles.cardTitle}>📅 Challenge Progress</Text>
+          <Text style={styles.accentText}>{challenge.progress}%</Text>
+        </View>
+        {renderProgressBar(challenge.progress, true)}
+        <View style={styles.timelineGrid}>
+          <View>
+            <Text style={styles.muted}>Start Date</Text>
+            <Text style={styles.valueText}>{challenge.startDate}</Text>
+          </View>
+          <View style={styles.centeredInfo}>
+            <Text style={styles.muted}>Days</Text>
+            <Text style={styles.bigAccent}>{challenge.daysPassed}</Text>
+          </View>
+          <View style={styles.alignRight}>
+            <Text style={styles.muted}>End Date</Text>
+            <Text style={styles.valueText}>{challenge.endDate}</Text>
+          </View>
+        </View>
+      </View>
 
-          {/* Progress Bar */}
-          <div className="relative h-3 bg-muted rounded-full overflow-hidden mb-4">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${progress}%` }}
-              transition={{ duration: 1, delay: 0.3 }}
-              className="absolute inset-y-0 left-0 bg-gradient-to-r from-secondary to-primary rounded-full"
-            />
-          </div>
+      <View style={styles.card}>
+        <View style={styles.rowBetween}>
+          <Text style={styles.cardTitle}>🎯 Today's Training</Text>
+          <Text style={styles.bigAccent}>75%</Text>
+        </View>
+        <View style={styles.circleProgress}>
+          <Text style={styles.circleEmoji}>🔥</Text>
+          <Text style={styles.circlePercent}>75%</Text>
+          <Text style={styles.muted}>Keep pushing!</Text>
+        </View>
+        <View style={styles.exerciseGrid}>
+          {exercises.map((item) => (
+            <View key={item.label} style={styles.exerciseBox}>
+              <Text style={styles.muted}>{item.label}</Text>
+              <Text style={styles.exerciseValue}>{item.value}</Text>
+              {item.completed && <Text style={styles.completed}>✓ Complete</Text>}
+            </View>
+          ))}
+        </View>
+      </View>
 
-          <div className="flex justify-between text-sm">
-            <div>
-              <p className="text-muted-foreground mb-1">Start Date</p>
-              <p className="font-bold text-foreground">{startDate.toLocaleDateString()}</p>
-            </div>
-            <div className="text-center">
-              <p className="text-muted-foreground mb-1">Days Completed</p>
-              <p className="font-bold text-primary text-xl">{daysPassed}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-muted-foreground mb-1">End Date</p>
-              <p className="font-bold text-foreground">{endDate.toLocaleDateString()}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Today's Progress */}
-        <div className="bg-card rounded-2xl p-6 border border-border/50">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-2">
-              <Target className="w-5 h-5 text-primary" />
-              <h3 className="text-lg font-bold">Today's Training</h3>
-            </div>
-            <span className="text-2xl font-bold text-primary">{todayProgress}%</span>
-          </div>
-
-          {/* Circular Progress */}
-          <div className="flex justify-center mb-6">
-            <div className="relative w-48 h-48">
-              <svg className="w-48 h-48 transform -rotate-90">
-                <circle
-                  cx="96"
-                  cy="96"
-                  r="88"
-                  stroke="currentColor"
-                  strokeWidth="12"
-                  fill="none"
-                  className="text-muted"
-                />
-                <motion.circle
-                  cx="96"
-                  cy="96"
-                  r="88"
-                  stroke="url(#gradient)"
-                  strokeWidth="12"
-                  fill="none"
-                  strokeLinecap="round"
-                  initial={{ strokeDashoffset: 553 }}
-                  animate={{ strokeDashoffset: 553 - (553 * todayProgress) / 100 }}
-                  transition={{ duration: 1, delay: 0.5 }}
-                  strokeDasharray="553"
-                />
-                <defs>
-                  <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#FF3838" />
-                    <stop offset="100%" stopColor="#FFD600" />
-                  </linearGradient>
-                </defs>
-              </svg>
-              <div className="absolute inset-0 flex items-center justify-center flex-col">
-                <Flame className="w-12 h-12 text-primary mb-2" />
-                <p className="text-sm text-muted-foreground">Keep pushing!</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Exercise Stats */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-muted/50 rounded-xl p-4">
-              <p className="text-xs text-muted-foreground mb-1">Push-ups</p>
-              <p className="text-2xl font-bold text-foreground">75/100</p>
-            </div>
-            <div className="bg-muted/50 rounded-xl p-4">
-              <p className="text-xs text-muted-foreground mb-1">Sit-ups</p>
-              <p className="text-2xl font-bold text-foreground">100/100</p>
-              <span className="text-xs text-primary">✓ Complete</span>
-            </div>
-            <div className="bg-muted/50 rounded-xl p-4">
-              <p className="text-xs text-muted-foreground mb-1">Squats</p>
-              <p className="text-2xl font-bold text-foreground">50/100</p>
-            </div>
-            <div className="bg-muted/50 rounded-xl p-4">
-              <p className="text-xs text-muted-foreground mb-1">Running</p>
-              <p className="text-2xl font-bold text-foreground">7.5/10 km</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Stats */}
-        <div className="grid grid-cols-3 gap-3">
-          <div className="bg-card rounded-xl p-4 border border-border/50 text-center">
-            <Flame className="w-6 h-6 text-secondary mx-auto mb-2" />
-            <p className="text-2xl font-bold text-foreground mb-1">127</p>
-            <p className="text-xs text-muted-foreground">Day Streak</p>
-          </div>
-          <div className="bg-card rounded-xl p-4 border border-border/50 text-center">
-            <TrendingUp className="w-6 h-6 text-primary mx-auto mb-2" />
-            <p className="text-2xl font-bold text-foreground mb-1">50.8K</p>
-            <p className="text-xs text-muted-foreground">Total Reps</p>
-          </div>
-          <div className="bg-card rounded-xl p-4 border border-border/50 text-center">
-            <Trophy className="w-6 h-6 text-primary mx-auto mb-2" />
-            <p className="text-2xl font-bold text-foreground mb-1">#3</p>
-            <p className="text-xs text-muted-foreground">Rank</p>
-          </div>
-        </div>
-      </div>
-    </motion.div>
+      <View style={styles.statsRow}>
+        <View style={styles.smallCard}>
+          <Text style={styles.statEmoji}>🔥</Text>
+          <Text style={styles.statNumber}>127</Text>
+          <Text style={styles.mutedSmall}>Day Streak</Text>
+        </View>
+        <View style={styles.smallCard}>
+          <Text style={styles.statEmoji}>📈</Text>
+          <Text style={styles.statNumber}>50.8K</Text>
+          <Text style={styles.mutedSmall}>Total Reps</Text>
+        </View>
+        <View style={styles.smallCard}>
+          <Text style={styles.statEmoji}>🏆</Text>
+          <Text style={styles.statNumber}>#3</Text>
+          <Text style={styles.mutedSmall}>Rank</Text>
+        </View>
+      </View>
+    </ScrollView>
   );
 
   const renderWorkoutScreen = () => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex-1 overflow-y-auto pb-24"
-    >
-      {/* Header */}
-      <div className="bg-gradient-to-br from-card to-background px-6 py-8 border-b border-border/50">
-        <div className="flex items-center gap-3 mb-2">
-          <Dumbbell className="w-8 h-8 text-primary" />
-          <h1 className="text-4xl font-bold tracking-wider" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
-            CHOOSE YOUR
-          </h1>
-        </div>
-        <h1 className="text-4xl font-bold tracking-wider text-primary ml-11" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
-          TRAINING MODE
-        </h1>
-        <p className="text-muted-foreground mt-3 ml-11">Saitama's legendary routine awaits</p>
-      </div>
+    <ScrollView contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
+      <Header emoji="🏋️" title="CHOOSE YOUR" titleAccent="TRAINING MODE" subtitle="Saitama's legendary routine awaits" />
 
-      <div className="px-6 py-6 space-y-4">
-        {/* Full Workout Card */}
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          className="w-full bg-gradient-to-br from-secondary to-secondary/80 rounded-2xl p-6 text-left border-2 border-secondary/50 hover:border-secondary transition-colors group relative overflow-hidden"
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-2xl" />
-          <div className="relative">
-            <div className="flex items-start justify-between mb-4">
-              <div className="bg-white/20 backdrop-blur-sm rounded-xl p-3">
-                <Zap className="w-8 h-8 text-white" />
-              </div>
-              <ChevronRight className="w-6 h-6 text-white/60 group-hover:text-white group-hover:translate-x-1 transition-all" />
-            </div>
-            <h2 className="text-2xl font-bold text-white mb-2" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
-              FULL WORKOUT
-            </h2>
-            <p className="text-white/80 text-sm mb-4">
-              Complete all exercises in one session. For the truly dedicated.
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
-                <p className="text-xs text-white/70">Push-ups</p>
-                <p className="text-lg font-bold text-white">100</p>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
-                <p className="text-xs text-white/70">Sit-ups</p>
-                <p className="text-lg font-bold text-white">100</p>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
-                <p className="text-xs text-white/70">Squats</p>
-                <p className="text-lg font-bold text-white">100</p>
-              </div>
-              <div className="bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
-                <p className="text-xs text-white/70">Run</p>
-                <p className="text-lg font-bold text-white">10 km</p>
-              </div>
-            </div>
-          </div>
-        </motion.button>
+      <WorkoutCard
+        emoji="⚡"
+        title="FULL WORKOUT"
+        description="Complete all exercises in one session. For the truly dedicated."
+        variant="red"
+        details={["100 Push-ups", "100 Sit-ups", "100 Squats", "10 km Run"]}
+      />
+      <WorkoutCard
+        emoji="⏰"
+        title="INTERCALATED WORKOUT"
+        description="Split the routine into different times. Balance strength and stamina."
+        variant="yellow"
+        details={["Morning: 50 Push + 50 Sit-ups", "Afternoon: 50 Squats + 5 km", "Evening: Remaining + 5 km"]}
+      />
+      <WorkoutCard
+        emoji="⏱️"
+        title="SUPER INTERCALATED"
+        description="Break it down into smaller sets throughout the day. Perfect for beginners."
+        details={["Every 2 hours", "10-20 reps each", "6-8 sessions per day"]}
+      />
 
-        {/* Intercalated Workout Card */}
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          className="w-full bg-gradient-to-br from-primary to-primary/90 rounded-2xl p-6 text-left border-2 border-primary/50 hover:border-primary transition-colors group relative overflow-hidden"
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-secondary/20 rounded-full blur-2xl" />
-          <div className="relative">
-            <div className="flex items-start justify-between mb-4">
-              <div className="bg-background/30 backdrop-blur-sm rounded-xl p-3">
-                <Clock className="w-8 h-8 text-background" />
-              </div>
-              <ChevronRight className="w-6 h-6 text-background/60 group-hover:text-background group-hover:translate-x-1 transition-all" />
-            </div>
-            <h2 className="text-2xl font-bold text-background mb-2" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
-              INTERCALATED WORKOUT
-            </h2>
-            <p className="text-background/80 text-sm mb-4">
-              Split the routine into different times. Balance strength and stamina.
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              <div className="bg-background/20 backdrop-blur-sm rounded-lg px-4 py-2">
-                <p className="text-xs text-background/70 mb-1">Morning</p>
-                <p className="text-sm font-bold text-background">50 Push + 50 Sit-ups</p>
-              </div>
-              <div className="bg-background/20 backdrop-blur-sm rounded-lg px-4 py-2">
-                <p className="text-xs text-background/70 mb-1">Afternoon</p>
-                <p className="text-sm font-bold text-background">50 Squats + 5 km</p>
-              </div>
-              <div className="bg-background/20 backdrop-blur-sm rounded-lg px-4 py-2">
-                <p className="text-xs text-background/70 mb-1">Evening</p>
-                <p className="text-sm font-bold text-background">Remaining + 5 km</p>
-              </div>
-            </div>
-          </div>
-        </motion.button>
-
-        {/* Super Intercalated Card */}
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          className="w-full bg-gradient-to-br from-card to-muted rounded-2xl p-6 text-left border-2 border-border hover:border-primary transition-colors group relative overflow-hidden"
-        >
-          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-2xl" />
-          <div className="relative">
-            <div className="flex items-start justify-between mb-4">
-              <div className="bg-primary/20 backdrop-blur-sm rounded-xl p-3">
-                <Timer className="w-8 h-8 text-primary" />
-              </div>
-              <ChevronRight className="w-6 h-6 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
-            </div>
-            <h2 className="text-2xl font-bold text-foreground mb-2" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
-              SUPER INTERCALATED
-            </h2>
-            <p className="text-muted-foreground text-sm mb-4">
-              Break it down into bite-sized sets throughout the day. Perfect for beginners.
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="bg-background/50 rounded-lg px-3 py-2 border border-border/50">
-                <p className="text-xs text-muted-foreground">Every 2 hours</p>
-                <p className="text-sm font-bold text-foreground">10-20 reps each</p>
-              </div>
-              <div className="bg-background/50 rounded-lg px-3 py-2 border border-border/50">
-                <p className="text-xs text-muted-foreground">Total Sessions</p>
-                <p className="text-sm font-bold text-foreground">6-8 per day</p>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground bg-primary/10 rounded-lg px-3 py-2">
-              <Activity className="w-4 h-4 text-primary" />
-              <span>Recommended for building consistency</span>
-            </div>
-          </div>
-        </motion.button>
-
-        {/* Info Box */}
-        <div className="bg-secondary/10 border border-secondary/30 rounded-xl p-4 mt-6">
-          <div className="flex gap-3">
-            <div className="flex-shrink-0">
-              <div className="w-10 h-10 rounded-full bg-secondary/20 flex items-center justify-center">
-                <span className="text-xl">💡</span>
-              </div>
-            </div>
-            <div>
-              <h4 className="font-bold text-foreground mb-1">Pro Tip</h4>
-              <p className="text-sm text-muted-foreground">
-                Don't forget: Never use the air conditioner in summer or heat in winter. This is crucial to becoming the strongest!
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </motion.div>
+      <View style={styles.tipBox}>
+        <Text style={styles.tipTitle}>💡 Pro Tip</Text>
+        <Text style={styles.muted}>Don't forget: consistency is more important than suffering. Build the habit first.</Text>
+      </View>
+    </ScrollView>
   );
 
   const renderRankingScreen = () => {
     const currentLeaderboard = rankingTab === "streak" ? leaderboardStreak : leaderboardTotal;
-    
+
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex-1 overflow-y-auto pb-24"
-      >
-        {/* Header */}
-        <div className="bg-gradient-to-br from-card to-background px-6 py-8 border-b border-border/50">
-          <div className="flex items-center gap-3 mb-2">
-            <Trophy className="w-8 h-8 text-primary" />
-            <h1 className="text-4xl font-bold tracking-wider" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
-              LEADERBOARD
-            </h1>
-          </div>
-          <p className="text-muted-foreground mt-2">Compete with heroes worldwide</p>
-        </div>
+      <ScrollView contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
+        <Header emoji="🏆" title="LEADERBOARD" subtitle="Compete with heroes worldwide" />
 
-        <div className="px-6 py-6 space-y-4">
-          {/* Tabs */}
-          <div className="flex gap-2 bg-muted rounded-xl p-1">
-            <button
-              onClick={() => setRankingTab("streak")}
-              className={`flex-1 py-3 px-4 rounded-lg font-bold text-sm transition-all ${
-                rankingTab === "streak"
-                  ? "bg-primary text-primary-foreground shadow-lg"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Flame className="w-4 h-4 inline-block mr-2" />
-              Consecutive Days
-            </button>
-            <button
-              onClick={() => setRankingTab("total")}
-              className={`flex-1 py-3 px-4 rounded-lg font-bold text-sm transition-all ${
-                rankingTab === "total"
-                  ? "bg-primary text-primary-foreground shadow-lg"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Target className="w-4 h-4 inline-block mr-2" />
-              Total Exercises
-            </button>
-          </div>
+        <View style={styles.segmentedControl}>
+          <SegmentButton active={rankingTab === "streak"} label="🔥 Consecutive Days" onPress={() => setRankingTab("streak")} />
+          <SegmentButton active={rankingTab === "total"} label="🎯 Total Exercises" onPress={() => setRankingTab("total")} />
+        </View>
 
-          {/* Workout Type Filter */}
-          <div className="flex gap-2 bg-card border border-border/50 rounded-xl p-1">
-            <button
-              onClick={() => setWorkoutFilter("single")}
-              className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
-                workoutFilter === "single"
-                  ? "bg-secondary text-secondary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Single Workout
-            </button>
-            <button
-              onClick={() => setWorkoutFilter("intercalated")}
-              className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
-                workoutFilter === "intercalated"
-                  ? "bg-secondary text-secondary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Intercalated
-            </button>
-          </div>
+        <View style={styles.filterControl}>
+          <SegmentButton active={workoutFilter === "single"} label="Single Workout" onPress={() => setWorkoutFilter("single")} small />
+          <SegmentButton active={workoutFilter === "intercalated"} label="Intercalated" onPress={() => setWorkoutFilter("intercalated")} small />
+        </View>
 
-          {/* Leaderboard */}
-          <div className="space-y-3">
-            {currentLeaderboard.map((user, index) => (
-              <motion.div
-                key={user.name}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className={`rounded-xl p-4 border-2 ${
-                  user.isCurrentUser
-                    ? "bg-gradient-to-r from-primary/20 to-secondary/20 border-primary"
-                    : "bg-card border-border/50"
-                } ${user.rank <= 3 ? "shadow-lg" : ""}`}
-              >
-                <div className="flex items-center gap-4">
-                  {/* Rank Badge */}
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-xl ${
-                    user.rank === 1 ? "bg-gradient-to-br from-primary to-yellow-600 text-primary-foreground" :
-                    user.rank === 2 ? "bg-gradient-to-br from-gray-300 to-gray-400 text-gray-800" :
-                    user.rank === 3 ? "bg-gradient-to-br from-orange-400 to-orange-600 text-white" :
-                    "bg-muted text-muted-foreground"
-                  }`} style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
-                    {user.rank}
-                  </div>
+        {currentLeaderboard.map((user) => (
+          <View key={user.name} style={[styles.leaderCard, user.isCurrentUser && styles.currentUserCard]}>
+            <View style={styles.rankBadge}>
+              <Text style={styles.rankText}>{user.rank}</Text>
+            </View>
+            <Text style={styles.avatar}>{user.avatar}</Text>
+            <View style={styles.flex1}>
+              <Text style={styles.userName}>{user.name} {user.isCurrentUser ? "• You" : ""}</Text>
+              <Text style={styles.muted}>{rankingTab === "streak" ? `${user.streak} day streak` : `${user.total.toLocaleString()} total reps`}</Text>
+            </View>
+            <Text style={styles.leaderValue}>{rankingTab === "streak" ? user.streak : user.total.toLocaleString()}</Text>
+          </View>
+        ))}
 
-                  {/* Avatar */}
-                  <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-2xl border-2 border-border">
-                    {user.avatar}
-                  </div>
-
-                  {/* User Info */}
-                  <div className="flex-1">
-                    <h3 className="font-bold text-foreground flex items-center gap-2">
-                      {user.name}
-                      {user.isCurrentUser && (
-                        <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">
-                          You
-                        </span>
-                      )}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      {rankingTab === "streak" ? (
-                        <>
-                          <Flame className="w-3 h-3 inline-block mr-1 text-secondary" />
-                          {user.streak} day streak
-                        </>
-                      ) : (
-                        <>
-                          <Target className="w-3 h-3 inline-block mr-1 text-primary" />
-                          {user.total.toLocaleString()} total reps
-                        </>
-                      )}
-                    </p>
-                  </div>
-
-                  {/* Stats */}
-                  <div className="text-right">
-                    <p className="text-2xl font-bold text-primary" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
-                      {rankingTab === "streak" ? user.streak : user.total.toLocaleString()}
-                    </p>
-                    {user.rank <= 3 && (
-                      <Trophy className="w-4 h-4 text-primary inline-block" />
-                    )}
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-
-          {/* Your Stats Summary */}
-          <div className="bg-gradient-to-br from-secondary/20 to-primary/20 rounded-2xl p-6 border-2 border-primary/50 mt-6">
-            <h3 className="text-lg font-bold text-foreground mb-4">Your Performance</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-background/50 backdrop-blur-sm rounded-xl p-4">
-                <Flame className="w-6 h-6 text-secondary mb-2" />
-                <p className="text-sm text-muted-foreground">Current Streak</p>
-                <p className="text-3xl font-bold text-foreground" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>127</p>
-              </div>
-              <div className="bg-background/50 backdrop-blur-sm rounded-xl p-4">
-                <Target className="w-6 h-6 text-primary mb-2" />
-                <p className="text-sm text-muted-foreground">Total Exercises</p>
-                <p className="text-3xl font-bold text-foreground" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>50.8K</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </motion.div>
+        <View style={styles.performanceCard}>
+          <Text style={styles.cardTitle}>Your Performance</Text>
+          <View style={styles.statsRow}>
+            <View style={styles.performanceItem}>
+              <Text style={styles.statEmoji}>🔥</Text>
+              <Text style={styles.statNumber}>127</Text>
+              <Text style={styles.mutedSmall}>Current Streak</Text>
+            </View>
+            <View style={styles.performanceItem}>
+              <Text style={styles.statEmoji}>🎯</Text>
+              <Text style={styles.statNumber}>50.8K</Text>
+              <Text style={styles.mutedSmall}>Total Exercises</Text>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
     );
   };
 
   const renderFriendsScreen = () => (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="flex-1 overflow-y-auto pb-24"
-    >
-      {/* Header */}
-      <div className="bg-gradient-to-br from-card to-background px-6 py-8 border-b border-border/50">
-        <div className="flex items-center gap-3 mb-2">
-          <Users className="w-8 h-8 text-primary" />
-          <h1 className="text-4xl font-bold tracking-wider" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
-            FRIENDS
-          </h1>
-        </div>
-        <p className="text-muted-foreground mt-2">Train together, grow stronger</p>
-      </div>
+    <ScrollView contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
+      <Header emoji="👥" title="FRIENDS" subtitle="Train together, grow stronger" />
 
-      <div className="px-6 py-6 space-y-6">
-        {/* Add Friends Section */}
-        <div className="bg-card rounded-2xl p-5 border border-border/50">
-          <div className="flex items-center gap-2 mb-3">
-            <UserPlus className="w-5 h-5 text-primary" />
-            <h3 className="font-bold text-foreground">Add Friends</h3>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search by username or email"
-              className="w-full bg-muted border border-border rounded-xl pl-12 pr-4 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-          </div>
-        </div>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>➕ Add Friends</Text>
+        <TextInput
+          placeholder="Search by username or email"
+          placeholderTextColor="#8f8f99"
+          style={styles.input}
+        />
+      </View>
 
-        {/* Friends List */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-foreground">Your Squad ({friends.length})</h3>
-            <span className="text-sm text-muted-foreground">Active today: 2</span>
-          </div>
-          
-          <div className="space-y-3">
-            {friends.map((friend, index) => (
-              <motion.div
-                key={friend.name}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="bg-card rounded-xl p-4 border border-border/50 hover:border-primary/50 transition-colors"
-              >
-                <div className="flex items-center gap-4 mb-3">
-                  {/* Avatar */}
-                  <div className="relative">
-                    <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center text-2xl border-2 border-border">
-                      {friend.avatar}
-                    </div>
-                    {friend.progress === 100 && (
-                      <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-primary rounded-full flex items-center justify-center border-2 border-background">
-                        <span className="text-xs">✓</span>
-                      </div>
-                    )}
-                  </div>
+      <View style={styles.rowBetween}>
+        <Text style={styles.cardTitle}>Your Squad ({friends.length})</Text>
+        <Text style={styles.muted}>Active today: 2</Text>
+      </View>
 
-                  {/* Friend Info */}
-                  <div className="flex-1">
-                    <h4 className="font-bold text-foreground mb-1">{friend.name}</h4>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Activity className="w-3 h-3" />
-                      {friend.status}
-                    </p>
-                  </div>
+      {friends.map((friend) => (
+        <View key={friend.name} style={styles.friendCard}>
+          <View style={styles.rowCenter}>
+            <Text style={styles.avatarLarge}>{friend.avatar}</Text>
+            <View style={styles.flex1}>
+              <Text style={styles.userName}>{friend.name}</Text>
+              <Text style={styles.muted}>🏃 {friend.status}</Text>
+            </View>
+            <Text style={[styles.leaderValue, friend.progress === 100 && styles.successText]}>{friend.progress}%</Text>
+          </View>
+          {renderProgressBar(friend.progress)}
+        </View>
+      ))}
 
-                  {/* Progress Percentage */}
-                  <div className="text-right">
-                    <p className={`text-2xl font-bold ${
-                      friend.progress === 100 ? "text-primary" : "text-foreground"
-                    }`} style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
-                      {friend.progress}%
-                    </p>
-                  </div>
-                </div>
-
-                {/* Progress Bar */}
-                <div className="relative h-2 bg-muted rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${friend.progress}%` }}
-                    transition={{ duration: 0.8, delay: index * 0.1 }}
-                    className={`absolute inset-y-0 left-0 rounded-full ${
-                      friend.progress === 100
-                        ? "bg-gradient-to-r from-primary to-primary"
-                        : friend.progress >= 50
-                        ? "bg-gradient-to-r from-primary to-secondary"
-                        : "bg-gradient-to-r from-secondary/50 to-primary/50"
-                    }`}
-                  />
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-
-        {/* Motivational Card */}
-        <div className="bg-gradient-to-br from-secondary/20 to-primary/20 rounded-2xl p-6 border-2 border-primary/50">
-          <div className="flex gap-4">
-            <div className="flex-shrink-0">
-              <div className="w-12 h-12 rounded-full bg-primary/30 flex items-center justify-center text-2xl">
-                🔥
-              </div>
-            </div>
-            <div>
-              <h4 className="font-bold text-foreground mb-2">Challenge Your Friends!</h4>
-              <p className="text-sm text-muted-foreground mb-3">
-                Invite friends to join the 3-year challenge. Those who train together, break their limiters together!
-              </p>
-              <button className="bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-2 rounded-lg font-bold text-sm transition-colors">
-                Send Invite
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </motion.div>
+      <View style={styles.performanceCard}>
+        <Text style={styles.cardTitle}>🔥 Challenge Your Friends!</Text>
+        <Text style={styles.muted}>Invite friends to join the 3-year challenge. Those who train together, break their limiters together!</Text>
+        <TouchableOpacity style={styles.primaryButton}>
+          <Text style={styles.primaryButtonText}>Send Invite</Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
   );
 
   return (
-    <div className="h-screen w-full max-w-md mx-auto bg-background flex flex-col relative overflow-hidden">
-      {/* Screen Content */}
-      {currentScreen === "home" && renderHomeScreen()}
-      {currentScreen === "workout" && renderWorkoutScreen()}
-      {currentScreen === "ranking" && renderRankingScreen()}
-      {currentScreen === "friends" && renderFriendsScreen()}
-
-      {/* Bottom Navigation */}
-      <div className="absolute bottom-0 left-0 right-0 bg-card border-t border-border/50 backdrop-blur-xl">
-        <div className="flex items-center justify-around px-6 py-4">
-          <button
-            onClick={() => setCurrentScreen("home")}
-            className={`flex flex-col items-center gap-1 transition-colors ${
-              currentScreen === "home" ? "text-primary" : "text-muted-foreground"
-            }`}
-          >
-            <Home className={`w-6 h-6 ${currentScreen === "home" ? "fill-primary" : ""}`} />
-            <span className="text-xs font-semibold">Home</span>
-          </button>
-          <button
-            onClick={() => setCurrentScreen("workout")}
-            className={`flex flex-col items-center gap-1 transition-colors ${
-              currentScreen === "workout" ? "text-primary" : "text-muted-foreground"
-            }`}
-          >
-            <Dumbbell className={`w-6 h-6 ${currentScreen === "workout" ? "fill-primary" : ""}`} />
-            <span className="text-xs font-semibold">Workout</span>
-          </button>
-          <button
-            onClick={() => setCurrentScreen("ranking")}
-            className={`flex flex-col items-center gap-1 transition-colors ${
-              currentScreen === "ranking" ? "text-primary" : "text-muted-foreground"
-            }`}
-          >
-            <Trophy className={`w-6 h-6 ${currentScreen === "ranking" ? "fill-primary" : ""}`} />
-            <span className="text-xs font-semibold">Ranking</span>
-          </button>
-          <button
-            onClick={() => setCurrentScreen("friends")}
-            className={`flex flex-col items-center gap-1 transition-colors ${
-              currentScreen === "friends" ? "text-primary" : "text-muted-foreground"
-            }`}
-          >
-            <Users className={`w-6 h-6 ${currentScreen === "friends" ? "fill-primary" : ""}`} />
-            <span className="text-xs font-semibold">Friends</span>
-          </button>
-        </div>
-      </div>
-    </div>
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" backgroundColor="#111114" />
+      <View style={styles.container}>
+        {currentScreen === "home" && renderHomeScreen()}
+        {currentScreen === "workout" && renderWorkoutScreen()}
+        {currentScreen === "ranking" && renderRankingScreen()}
+        {currentScreen === "friends" && renderFriendsScreen()}
+        <BottomNav currentScreen={currentScreen} setCurrentScreen={setCurrentScreen} />
+      </View>
+    </SafeAreaView>
   );
 }
+
+function Header({ emoji, title, titleAccent, subtitle }: { emoji: string; title: string; titleAccent?: string; subtitle: string }) {
+  return (
+    <View style={styles.header}>
+      <Text style={styles.headerEmoji}>{emoji}</Text>
+      <Text style={styles.headerTitle}>{title}</Text>
+      {titleAccent && <Text style={styles.headerTitleAccent}>{titleAccent}</Text>}
+      <Text style={styles.headerSubtitle}>{subtitle}</Text>
+    </View>
+  );
+}
+
+function WorkoutCard({ emoji, title, description, details, variant }: { emoji: string; title: string; description: string; details: string[]; variant?: "red" | "yellow" }) {
+  return (
+    <TouchableOpacity style={[styles.workoutCard, variant === "red" && styles.workoutCardRed, variant === "yellow" && styles.workoutCardYellow]} activeOpacity={0.85}>
+      <Text style={styles.workoutEmoji}>{emoji}</Text>
+      <Text style={[styles.workoutTitle, variant && styles.darkText]}>{title}</Text>
+      <Text style={[styles.workoutDescription, variant && styles.darkMutedText]}>{description}</Text>
+      <View style={styles.detailList}>
+        {details.map((item) => (
+          <Text key={item} style={[styles.detailPill, variant && styles.lightPill]}>{item}</Text>
+        ))}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function SegmentButton({ active, label, onPress, small }: { active: boolean; label: string; onPress: () => void; small?: boolean }) {
+  return (
+    <TouchableOpacity onPress={onPress} style={[styles.segmentButton, active && styles.segmentButtonActive, small && styles.segmentButtonSmall]}>
+      <Text style={[styles.segmentButtonText, active && styles.segmentButtonTextActive, small && styles.segmentButtonTextSmall]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function BottomNav({ currentScreen, setCurrentScreen }: { currentScreen: Screen; setCurrentScreen: (screen: Screen) => void }) {
+  const items: { screen: Screen; label: string; icon: string }[] = [
+    { screen: "home", label: "Home", icon: "🏠" },
+    { screen: "workout", label: "Workout", icon: "🏋️" },
+    { screen: "ranking", label: "Ranking", icon: "🏆" },
+    { screen: "friends", label: "Friends", icon: "👥" },
+  ];
+
+  return (
+    <View style={styles.bottomNav}>
+      {items.map((item) => {
+        const active = currentScreen === item.screen;
+        return (
+          <TouchableOpacity key={item.screen} style={styles.navButton} onPress={() => setCurrentScreen(item.screen)}>
+            <Text style={styles.navIcon}>{item.icon}</Text>
+            <Text style={[styles.navLabel, active && styles.navLabelActive]}>{item.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+const colors = {
+  background: "#111114",
+  card: "#1b1b21",
+  muted: "#2a2a32",
+  border: "#34343d",
+  text: "#ffffff",
+  mutedText: "#a8a8b3",
+  yellow: "#ffd600",
+  red: "#ff3838",
+  success: "#43d17a",
+};
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: colors.background },
+  screenContent: { paddingBottom: 110 },
+  hero: { minHeight: 245, padding: 24, justifyContent: "center", backgroundColor: "#2a2020" },
+  heroEmoji: { fontSize: 64, marginBottom: 8 },
+  heroTitle: { color: colors.text, fontSize: 46, fontWeight: "900", letterSpacing: 1 },
+  heroTitleAccent: { color: colors.yellow, fontSize: 50, fontWeight: "900", letterSpacing: 1 },
+  heroSubtitle: { color: colors.mutedText, fontSize: 14, fontWeight: "600" },
+  header: { padding: 24, borderBottomWidth: 1, borderBottomColor: colors.border, backgroundColor: "#151519" },
+  headerEmoji: { fontSize: 34, marginBottom: 8 },
+  headerTitle: { color: colors.text, fontSize: 34, fontWeight: "900", letterSpacing: 1 },
+  headerTitleAccent: { color: colors.yellow, fontSize: 34, fontWeight: "900", letterSpacing: 1 },
+  headerSubtitle: { color: colors.mutedText, marginTop: 6, fontSize: 14 },
+  card: { marginHorizontal: 20, marginTop: 20, padding: 18, borderRadius: 22, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  cardTitle: { color: colors.text, fontSize: 18, fontWeight: "800" },
+  rowBetween: { marginHorizontal: 20, marginTop: 20, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  rowCenter: { flexDirection: "row", alignItems: "center", gap: 12 },
+  accentText: { color: colors.yellow, fontWeight: "900" },
+  muted: { color: colors.mutedText, fontSize: 13 },
+  mutedSmall: { color: colors.mutedText, fontSize: 11, textAlign: "center" },
+  valueText: { color: colors.text, fontWeight: "800", marginTop: 4 },
+  bigAccent: { color: colors.yellow, fontWeight: "900", fontSize: 24 },
+  progressTrack: { height: 8, backgroundColor: colors.muted, borderRadius: 999, overflow: "hidden", marginTop: 12 },
+  progressTrackLarge: { height: 12, marginVertical: 18 },
+  progressFill: { height: "100%", backgroundColor: colors.yellow, borderRadius: 999 },
+  timelineGrid: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" },
+  centeredInfo: { alignItems: "center" },
+  alignRight: { alignItems: "flex-end" },
+  circleProgress: { alignSelf: "center", width: 185, height: 185, borderRadius: 100, borderWidth: 14, borderColor: colors.yellow, alignItems: "center", justifyContent: "center", marginVertical: 22, backgroundColor: "#151519" },
+  circleEmoji: { fontSize: 36 },
+  circlePercent: { color: colors.text, fontSize: 34, fontWeight: "900" },
+  exerciseGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  exerciseBox: { width: "48%", padding: 14, borderRadius: 16, backgroundColor: colors.muted },
+  exerciseValue: { color: colors.text, fontSize: 21, fontWeight: "900", marginTop: 5 },
+  completed: { color: colors.yellow, fontSize: 12, marginTop: 4, fontWeight: "800" },
+  statsRow: { flexDirection: "row", gap: 10, marginHorizontal: 20, marginTop: 16 },
+  smallCard: { flex: 1, padding: 14, borderRadius: 18, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, alignItems: "center" },
+  statEmoji: { fontSize: 24, marginBottom: 5 },
+  statNumber: { color: colors.text, fontSize: 24, fontWeight: "900", textAlign: "center" },
+  workoutCard: { marginHorizontal: 20, marginTop: 18, padding: 20, borderRadius: 24, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  workoutCardRed: { backgroundColor: colors.red, borderColor: "#ff7777" },
+  workoutCardYellow: { backgroundColor: colors.yellow, borderColor: "#fff08a" },
+  workoutEmoji: { fontSize: 34, marginBottom: 10 },
+  workoutTitle: { color: colors.text, fontSize: 26, fontWeight: "900" },
+  workoutDescription: { color: colors.mutedText, marginTop: 6, marginBottom: 14, lineHeight: 20 },
+  darkText: { color: "#161616" },
+  darkMutedText: { color: "#2c2c2c" },
+  detailList: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  detailPill: { color: colors.text, backgroundColor: colors.muted, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 12, overflow: "hidden", fontWeight: "800", fontSize: 12 },
+  lightPill: { color: "#161616", backgroundColor: "rgba(255,255,255,0.35)" },
+  tipBox: { marginHorizontal: 20, marginTop: 20, padding: 16, borderRadius: 18, backgroundColor: "rgba(255,214,0,0.08)", borderWidth: 1, borderColor: "rgba(255,214,0,0.3)" },
+  tipTitle: { color: colors.text, fontWeight: "900", marginBottom: 6 },
+  segmentedControl: { flexDirection: "row", gap: 8, marginHorizontal: 20, marginTop: 20, padding: 5, borderRadius: 18, backgroundColor: colors.muted },
+  filterControl: { flexDirection: "row", gap: 8, marginHorizontal: 20, marginTop: 12, padding: 5, borderRadius: 18, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  segmentButton: { flex: 1, paddingVertical: 12, borderRadius: 14, alignItems: "center" },
+  segmentButtonActive: { backgroundColor: colors.yellow },
+  segmentButtonSmall: { paddingVertical: 9 },
+  segmentButtonText: { color: colors.mutedText, fontWeight: "800", fontSize: 12 },
+  segmentButtonTextActive: { color: "#111" },
+  segmentButtonTextSmall: { fontSize: 11 },
+  leaderCard: { flexDirection: "row", alignItems: "center", gap: 12, marginHorizontal: 20, marginTop: 12, padding: 14, borderRadius: 18, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  currentUserCard: { borderColor: colors.yellow, backgroundColor: "#272115" },
+  rankBadge: { width: 42, height: 42, borderRadius: 13, backgroundColor: colors.muted, alignItems: "center", justifyContent: "center" },
+  rankText: { color: colors.yellow, fontWeight: "900", fontSize: 19 },
+  avatar: { fontSize: 28 },
+  avatarLarge: { width: 54, height: 54, fontSize: 32, textAlign: "center", textAlignVertical: "center", borderRadius: 28, backgroundColor: colors.muted, overflow: "hidden" },
+  flex1: { flex: 1 },
+  userName: { color: colors.text, fontSize: 16, fontWeight: "900" },
+  leaderValue: { color: colors.yellow, fontSize: 20, fontWeight: "900" },
+  performanceCard: { marginHorizontal: 20, marginTop: 20, padding: 18, borderRadius: 22, backgroundColor: "rgba(255,214,0,0.08)", borderWidth: 1, borderColor: "rgba(255,214,0,0.4)" },
+  performanceItem: { flex: 1, padding: 14, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.05)", alignItems: "center" },
+  input: { marginTop: 14, borderRadius: 16, backgroundColor: colors.muted, borderWidth: 1, borderColor: colors.border, paddingHorizontal: 16, paddingVertical: 14, color: colors.text },
+  friendCard: { marginHorizontal: 20, marginTop: 12, padding: 16, borderRadius: 18, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border },
+  successText: { color: colors.success },
+  primaryButton: { alignSelf: "flex-start", marginTop: 14, backgroundColor: colors.yellow, borderRadius: 12, paddingVertical: 11, paddingHorizontal: 18 },
+  primaryButtonText: { color: "#111", fontWeight: "900" },
+  bottomNav: { position: "absolute", left: 0, right: 0, bottom: 0, flexDirection: "row", justifyContent: "space-around", paddingTop: 10, paddingBottom: 16, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
+  navButton: { alignItems: "center", gap: 2, minWidth: 70 },
+  navIcon: { fontSize: 22 },
+  navLabel: { color: colors.mutedText, fontSize: 11, fontWeight: "800" },
+  navLabelActive: { color: colors.yellow },
+});
