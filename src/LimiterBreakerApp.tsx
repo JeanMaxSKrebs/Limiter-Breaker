@@ -6,6 +6,7 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -25,6 +26,11 @@ import {
   listenUserProfile,
   saveDailyProgress,
 } from "./services/progressService";
+import {
+  cancelScheduledNotification,
+  requestNotificationPermissions,
+  scheduleWorkoutNotification,
+} from "./services/notificationService";
 import {
   listenGlobalStreakRanking,
   listenTotalExercisesRanking,
@@ -69,6 +75,10 @@ export default function LimiterBreakerApp() {
   const [currentScreen, setCurrentScreen] = useState<Screen>("home");
   const [rankingTab, setRankingTab] = useState<RankingTab>("streak");
   const [workoutMode, setWorkoutMode] = useState<WorkoutMode>("full");
+  const [workoutStartTime, setWorkoutStartTime] = useState("08:00");
+  const [workoutNotificationEnabled, setWorkoutNotificationEnabled] = useState(false);
+  const [workoutNotificationId, setWorkoutNotificationId] = useState<string | null>(null);
+  const [workoutSegmentMode, setWorkoutSegmentMode] = useState<"oneByOne" | "split" | "custom">("oneByOne");
   const [globalRanking, setGlobalRanking] = useState<RankingUser[]>([]);
   const [totalRanking, setTotalRanking] = useState<RankingUser[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -80,10 +90,49 @@ export default function LimiterBreakerApp() {
   const { t } = useLocalization();
 
   useEffect(() => {
-    if (profile?.preferredWorkoutMode) {
-      setWorkoutMode(profile.preferredWorkoutMode);
-    }
-  }, [profile]);
+    let isMounted = true;
+
+    const syncNotification = async () => {
+      if (!workoutNotificationEnabled) {
+        if (workoutNotificationId) {
+          await cancelScheduledNotification(workoutNotificationId);
+          if (isMounted) {
+            setWorkoutNotificationId(null);
+          }
+        }
+        return;
+      }
+
+      const granted = await requestNotificationPermissions();
+      if (!granted) {
+        if (isMounted) {
+          setWorkoutNotificationEnabled(false);
+          Alert.alert(t("common.error"), t("workout.notificationsDenied"));
+        }
+        return;
+      }
+
+      if (workoutNotificationId) {
+        await cancelScheduledNotification(workoutNotificationId);
+      }
+
+      const notificationId = await scheduleWorkoutNotification(
+        workoutStartTime,
+        workoutMode,
+        workoutSegmentMode
+      );
+
+      if (isMounted) {
+        setWorkoutNotificationId(notificationId);
+      }
+    };
+
+    syncNotification();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [workoutNotificationEnabled, workoutStartTime, workoutMode, workoutSegmentMode]);
 
   useEffect(() => {
     const unsubscribe = listenAuthState((authUser) => {
@@ -150,6 +199,69 @@ export default function LimiterBreakerApp() {
     completed: false,
     createdAt: null,
     updatedAt: null,
+  };
+
+  useEffect(() => {
+    if (profile?.preferredWorkoutMode) {
+      setWorkoutMode(profile.preferredWorkoutMode);
+    }
+  }, [profile?.preferredWorkoutMode]);
+
+  const resetTodayProgress = async () => {
+    if (!user) {
+      return;
+    }
+
+    await saveDailyProgress(user.uid, {
+      date: todayId,
+      pushups: 0,
+      situps: 0,
+      squats: 0,
+      runKm: 0,
+      completed: false,
+    });
+  };
+
+  const applyWorkoutModeChange = async (mode: WorkoutMode, shouldResetProgress = false) => {
+    if (!user) {
+      return;
+    }
+
+    setSavingWorkout(true);
+    try {
+      if (shouldResetProgress) {
+        await resetTodayProgress();
+      }
+      await updateUserWorkoutMode(user.uid, mode);
+      setWorkoutMode(mode);
+    } catch (error: any) {
+      Alert.alert(t("common.error"), error?.message || t("common.error"));
+    } finally {
+      setSavingWorkout(false);
+    }
+  };
+
+  const handleWorkoutModeSwitch = (nextMode: WorkoutMode) => {
+    if (workoutMode === nextMode) {
+      return;
+    }
+
+    if (todaySnapshot.pushups || todaySnapshot.situps || todaySnapshot.squats || todaySnapshot.runKm) {
+      Alert.alert(
+        t("workout.confirmModeChangeTitle"),
+        t("workout.confirmModeChangeDescription"),
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("workout.confirmModeChange"),
+            style: "destructive",
+            onPress: () => applyWorkoutModeChange(nextMode, true),
+          },
+        ]
+      );
+    } else {
+      applyWorkoutModeChange(nextMode, false);
+    }
   };
 
   const renderProgressBar = (value: number, large = false) => (
@@ -351,7 +463,7 @@ export default function LimiterBreakerApp() {
 
   const profileName = profile?.displayName || "Herói";
   const usernameLabel = profile?.username ? `@${profile.username}` : "";
-  const effectiveWorkoutMode = profile?.preferredWorkoutMode || workoutMode;
+  const effectiveWorkoutMode = workoutMode;
 
   const renderHomeScreen = () => (
     <ScrollView contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
@@ -442,9 +554,9 @@ export default function LimiterBreakerApp() {
       <Header emoji="🏋️" title={t("workout.title")} subtitle={t("workout.subtitle")} />
 
       <View style={styles.segmentedControl}>
-        <SegmentButton active={effectiveWorkoutMode === "full"} label={t("workout.fullWorkout")} onPress={() => setWorkoutMode("full")} />
-        <SegmentButton active={effectiveWorkoutMode === "intercalated"} label={t("workout.intercalatedWorkout")} onPress={() => setWorkoutMode("intercalated")} />
-        <SegmentButton active={effectiveWorkoutMode === "super_intercalated"} label={t("workout.superIntercalated")} onPress={() => setWorkoutMode("super_intercalated")} />
+        <SegmentButton active={effectiveWorkoutMode === "full"} label={t("workout.fullWorkout")} onPress={() => handleWorkoutModeSwitch("full")} />
+        <SegmentButton active={effectiveWorkoutMode === "intercalated"} label={t("workout.intercalatedWorkout")} onPress={() => handleWorkoutModeSwitch("intercalated")} />
+        <SegmentButton active={effectiveWorkoutMode === "super_intercalated"} label={t("workout.superIntercalated")} onPress={() => handleWorkoutModeSwitch("super_intercalated")} />
       </View>
 
       <View style={[styles.card, styles.highlightCard]}>
@@ -454,78 +566,97 @@ export default function LimiterBreakerApp() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t("workout.subtitle")}</Text>
-        <Text style={styles.muted}>{todayId}</Text>
-        {renderProgressBar(progressPercent, true)}
-        <View style={styles.timelineGridLarge}>
-          <View style={styles.metricBox}>
-            <Text style={styles.muted}>{t("workout.pushups")}</Text>
-            <Text style={styles.valueText}>{todaySnapshot.pushups}/100</Text>
-          </View>
-          <View style={styles.metricBox}>
-            <Text style={styles.muted}>{t("workout.situps")}</Text>
-            <Text style={styles.valueText}>{todaySnapshot.situps}/100</Text>
-          </View>
-          <View style={styles.metricBox}>
-            <Text style={styles.muted}>{t("workout.squats")}</Text>
-            <Text style={styles.valueText}>{todaySnapshot.squats}/100</Text>
-          </View>
-          <View style={styles.metricBox}>
-            <Text style={styles.muted}>{t("workout.run")}</Text>
-            <Text style={styles.valueText}>{todaySnapshot.runKm.toFixed(1)}/10 km</Text>
+        <Text style={styles.cardTitle}>{t("workout.scheduleTitle")}</Text>
+        <Text style={styles.cardSubtitle}>{t("workout.scheduleSubtitle")}</Text>
+        <View style={styles.rowBetweenInside}>
+          <TextInput
+            value={workoutStartTime}
+            onChangeText={setWorkoutStartTime}
+            placeholder="08:00"
+            placeholderTextColor="#8f8f99"
+            style={styles.timeInput}
+            keyboardType="numeric"
+          />
+          <View style={styles.notificationRow}>
+            <Text style={styles.muted}>{t("workout.scheduleNotification")}</Text>
+            <Switch
+              value={workoutNotificationEnabled}
+              onValueChange={setWorkoutNotificationEnabled}
+              thumbColor={workoutNotificationEnabled ? colors.yellow : "#666"}
+              trackColor={{ false: "#444", true: "#ffd600" }}
+            />
           </View>
         </View>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>{t("workout.proTip")}</Text>
-        <Text style={styles.cardSubtitle}>{t("workout.fullWorkoutDescription")}</Text>
+        <Text style={styles.cardSubtitle}>{t("workout.segmentDescription")}</Text>
+        <View style={styles.optionListRow}>
+          <SegmentButton small active={workoutSegmentMode === "oneByOne"} label={t("workout.segmentFormatSequential")} onPress={() => setWorkoutSegmentMode("oneByOne")} />
+          <SegmentButton small active={workoutSegmentMode === "split"} label={t("workout.segmentFormatSplit")} onPress={() => setWorkoutSegmentMode("split")} />
+          <SegmentButton small active={workoutSegmentMode === "custom"} label={t("workout.segmentFormatCustom")} onPress={() => setWorkoutSegmentMode("custom")} />
+        </View>
       </View>
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t("workout.quickActionsTitle")}</Text>
-        <View style={styles.buttonGrid}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.actionButtonOrange]}
-            onPress={() => handleAddProgress({ pushups: 10 })}
-            disabled={savingWorkout}
-          >
-            <Text style={styles.actionButtonText}>{t("workout.addPushups")}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.actionButtonOrange]}
-            onPress={() => handleAddProgress({ situps: 10 })}
-            disabled={savingWorkout}
-          >
-            <Text style={styles.actionButtonText}>{t("workout.addSitups")}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.actionButtonRed]}
-            onPress={() => handleAddProgress({ runKm: 1 })}
-            disabled={savingWorkout}
-          >
-            <Text style={styles.actionButtonText}>{t("workout.addRunKm")}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.actionButtonOrange]}
-            onPress={() => handleAddProgress({ squats: 20 })}
-            disabled={savingWorkout}
-          >
-            <Text style={styles.actionButtonText}>{t("workout.addSquats")}</Text>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity
-          style={[styles.primaryButton, { width: "100%", marginTop: 14 }]}
-          onPress={handleCompleteWorkout}
-          disabled={savingWorkout || isProgressComplete}
-        >
-          {savingWorkout ? (
-            <ActivityIndicator color="#111" />
-          ) : (
-            <Text style={styles.primaryButtonText}>{t("workout.complete")}</Text>
-          )}
-        </TouchableOpacity>
+        {effectiveWorkoutMode === "full" && !isProgressComplete ? (
+          <>
+            <TouchableOpacity
+              style={[styles.primaryButton, { width: "100%" }]}
+              onPress={handleCompleteWorkout}
+              disabled={savingWorkout}
+            >
+              {savingWorkout ? (
+                <ActivityIndicator color="#111" />
+              ) : (
+                <Text style={styles.primaryButtonText}>{t("workout.fullWorkoutCompletion")}</Text>
+              )}
+            </TouchableOpacity>
+            <Text style={[styles.cardSubtitle, { marginTop: 12 }]}>{t("workout.fullModeHint")}</Text>
+          </>
+        ) : (
+          <>
+            <View style={styles.buttonGrid}>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.actionButtonOrange]}
+                onPress={() => handleAddProgress({ pushups: 10 })}
+                disabled={savingWorkout}
+              >
+                <Text style={styles.actionButtonText}>{t("workout.addPushups")}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.actionButtonOrange]}
+                onPress={() => handleAddProgress({ situps: 10 })}
+                disabled={savingWorkout}
+              >
+                <Text style={styles.actionButtonText}>{t("workout.addSitups")}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.actionButtonRed]}
+                onPress={() => handleAddProgress({ runKm: 1 })}
+                disabled={savingWorkout}
+              >
+                <Text style={styles.actionButtonText}>{t("workout.addRunKm")}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.actionButton, styles.actionButtonOrange]}
+                onPress={() => handleAddProgress({ squats: 20 })}
+                disabled={savingWorkout}
+              >
+                <Text style={styles.actionButtonText}>{t("workout.addSquats")}</Text>
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={[styles.primaryButton, { width: "100%", marginTop: 14 }]}
+              onPress={handleCompleteWorkout}
+              disabled={savingWorkout || isProgressComplete}
+            >
+              {savingWorkout ? (
+                <ActivityIndicator color="#111" />
+              ) : (
+                <Text style={styles.primaryButtonText}>{t("workout.complete")}</Text>
+              )}
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
       {isProgressComplete && (
@@ -801,6 +932,9 @@ const styles = StyleSheet.create({
   workoutTitle: { color: colors.text, fontSize: 26, fontWeight: "900" },
   workoutDescription: { color: colors.mutedText, marginTop: 6, marginBottom: 14, lineHeight: 20 },
   buttonGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 },
+  timeInput: { flex: 1, minHeight: 48, paddingHorizontal: 16, borderRadius: 16, backgroundColor: "#151519", borderWidth: 1, borderColor: colors.border, color: colors.text },
+  notificationRow: { flex: 1, paddingLeft: 14, justifyContent: "center", alignItems: "flex-end" },
+  optionListRow: { flexDirection: "row", gap: 8, marginTop: 12 },
   actionButton: { flex: 1, minWidth: 140, paddingVertical: 14, paddingHorizontal: 12, borderRadius: 18, justifyContent: "center", alignItems: "center" },
   actionButtonText: { color: "#111", fontWeight: "900", textAlign: "center" },
   actionButtonOrange: { backgroundColor: "#ffd600" },
