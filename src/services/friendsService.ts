@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDocs,
   onSnapshot,
@@ -61,14 +62,20 @@ export function listenFriendRequests(uid: string, callback: (requests: any[]) =>
     where("status", "==", "pending")
   );
 
-  return onSnapshot(requestsQuery, (snapshot) => {
-    callback(
-      snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }))
-    );
-  });
+  return onSnapshot(
+    requestsQuery,
+    (snapshot) => {
+      callback(
+        snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+      );
+    },
+    () => {
+      callback([]);
+    }
+  );
 }
 
 export async function acceptFriendRequest(requestId: string, fromUid: string, toUid: string) {
@@ -121,12 +128,26 @@ export async function rejectFriendRequest(requestId: string) {
 
 export function listenFriends(uid: string, callback: (friends: any[]) => void) {
   const friendsCollection = collection(db, "users", uid, "friends");
-  return onSnapshot(friendsCollection, (snapshot) => {
-    callback(
-      snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }))
-    );
-  });
+  return onSnapshot(
+    friendsCollection,
+    (snapshot) => {
+      callback(
+        snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+      );
+    },
+    () => {
+      callback([]);
+    }
+  );
+}
+
+export async function removeFriend(uid: string, friendUid: string) {
+  const friendRefA = doc(db, "users", uid, "friends", friendUid);
+  const friendRefB = doc(db, "users", friendUid, "friends", uid);
+
+  await deleteDoc(friendRefA);
+  await deleteDoc(friendRefB);
 }

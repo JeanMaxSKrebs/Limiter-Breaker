@@ -1,7 +1,7 @@
 import Constants from "expo-constants";
 import { getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth, initializeAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const extra = Constants.expoConfig?.extra ?? {};
@@ -41,3 +41,13 @@ try {
 
 export const auth = _auth as ReturnType<typeof getAuth>;
 export const db = getFirestore(app);
+
+try {
+  if (typeof enableIndexedDbPersistence === "function") {
+    enableIndexedDbPersistence(db).catch(() => {
+      // persistence may not be supported in this environment, ignore.
+    });
+  }
+} catch {
+  // ignore unsupported persistence attempts in React Native/Expo
+}

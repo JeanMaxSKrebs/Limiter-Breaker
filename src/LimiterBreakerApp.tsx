@@ -13,10 +13,11 @@ import {
 } from "react-native";
 import { User } from "firebase/auth";
 import AuthScreen from "./screens/AuthScreen";
+import WorkoutModeOnboardingScreen from "./screens/WorkoutModeOnboardingScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import CreditsScreen from "./screens/CreditsScreen";
 import { useLocalization } from "./localization/LocalizationContext";
-import { logout, listenAuthState } from "./services/authService";
+import { logout, listenAuthState, updateUserWorkoutMode } from "./services/authService";
 import {
   completeWorkout,
   getTodayId,
@@ -43,7 +44,7 @@ import {
   WorkoutMode,
 } from "./types/firebase";
 
-type Screen = "home" | "workout" | "ranking" | "friends" | "settings" | "credits";
+type Screen = "home" | "workout" | "ranking" | "friends" | "settings" | "credits" | "onboarding";
 type RankingTab = "streak" | "total";
 
 type FriendRequest = {
@@ -75,7 +76,14 @@ export default function LimiterBreakerApp() {
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [friendsList, setFriendsList] = useState<FriendItem[]>([]);
   const [savingWorkout, setSavingWorkout] = useState(false);
+  const [savingOnboarding, setSavingOnboarding] = useState(false);
   const { t } = useLocalization();
+
+  useEffect(() => {
+    if (profile?.preferredWorkoutMode) {
+      setWorkoutMode(profile.preferredWorkoutMode);
+    }
+  }, [profile]);
 
   useEffect(() => {
     const unsubscribe = listenAuthState((authUser) => {
@@ -241,7 +249,23 @@ export default function LimiterBreakerApp() {
       const results = await searchUsersByUsername(searchQuery);
       setSearchResults(results.filter((item) => item.uid !== user?.uid));
     } catch (error: any) {
-      Alert.alert("Erro", error?.message || "Falha ao buscar usuário.");
+      Alert.alert(t("common.error"), error?.message || t("common.error"));
+    }
+  };
+
+  const handleOnboardingSelect = async (mode: WorkoutMode) => {
+    if (!user) {
+      return;
+    }
+
+    setSavingOnboarding(true);
+    try {
+      await updateUserWorkoutMode(user.uid, mode);
+      setCurrentScreen("home");
+    } catch (error: any) {
+      Alert.alert(t("common.error"), error?.message || t("common.error"));
+    } finally {
+      setSavingOnboarding(false);
     }
   };
 
@@ -294,8 +318,14 @@ export default function LimiterBreakerApp() {
     return <AuthScreen />;
   }
 
+  const shouldShowOnboarding = Boolean(profile && profile.onboardingCompleted === false);
+  if (shouldShowOnboarding) {
+    return <WorkoutModeOnboardingScreen onSelectMode={handleOnboardingSelect} />;
+  }
+
   const profileName = profile?.displayName || "Herói";
   const usernameLabel = profile?.username ? `@${profile.username}` : "";
+  const effectiveWorkoutMode = profile?.preferredWorkoutMode || workoutMode;
 
   const renderHomeScreen = () => (
     <ScrollView contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
@@ -383,66 +413,92 @@ export default function LimiterBreakerApp() {
 
   const renderWorkoutScreen = () => (
     <ScrollView contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
-      <Header emoji="🏋️" title="WORKOUT" subtitle="Complete seu treino do dia" />
+      <Header emoji="🏋️" title={t("workout.title")} subtitle={t("workout.subtitle")} />
 
       <View style={styles.segmentedControl}>
-        <SegmentButton active={workoutMode === "full"} label="FULL" onPress={() => setWorkoutMode("full")} />
-        <SegmentButton active={workoutMode === "intercalated"} label="INTERCALATED" onPress={() => setWorkoutMode("intercalated")} />
-        <SegmentButton active={workoutMode === "super_intercalated"} label="SUPER" onPress={() => setWorkoutMode("super_intercalated")} />
+        <SegmentButton active={effectiveWorkoutMode === "full"} label={t("workout.fullWorkout")} onPress={() => setWorkoutMode("full")} />
+        <SegmentButton active={effectiveWorkoutMode === "intercalated"} label={t("workout.intercalatedWorkout")} onPress={() => setWorkoutMode("intercalated")} />
+        <SegmentButton active={effectiveWorkoutMode === "super_intercalated"} label={t("workout.superIntercalated")} onPress={() => setWorkoutMode("super_intercalated")} />
+      </View>
+
+      <View style={[styles.card, styles.highlightCard]}>
+        <Text style={styles.cardTitle}>{t("workout.preferredMode")}</Text>
+        <Text style={styles.valueText}>{t(`workout.${effectiveWorkoutMode}`)}</Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Seu progresso hoje</Text>
+        <Text style={styles.cardTitle}>{t("workout.subtitle")}</Text>
         <Text style={styles.muted}>{todayId}</Text>
         {renderProgressBar(progressPercent, true)}
         <View style={styles.timelineGrid}>
           <View>
-            <Text style={styles.muted}>Push-ups</Text>
+            <Text style={styles.muted}>{t("workout.pushups")}</Text>
             <Text style={styles.valueText}>{todaySnapshot.pushups}/100</Text>
           </View>
           <View>
-            <Text style={styles.muted}>Sit-ups</Text>
+            <Text style={styles.muted}>{t("workout.situps")}</Text>
             <Text style={styles.valueText}>{todaySnapshot.situps}/100</Text>
           </View>
           <View>
-            <Text style={styles.muted}>Squats</Text>
+            <Text style={styles.muted}>{t("workout.squats")}</Text>
             <Text style={styles.valueText}>{todaySnapshot.squats}/100</Text>
           </View>
           <View>
-            <Text style={styles.muted}>Run</Text>
+            <Text style={styles.muted}>{t("workout.run")}</Text>
             <Text style={styles.valueText}>{todaySnapshot.runKm.toFixed(1)}/10 km</Text>
           </View>
         </View>
+      </View>
 
-        <View style={styles.rowBetweenInside}>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>{t("workout.proTip")}</Text>
+        <Text style={styles.cardSubtitle}>{t("workout.fullWorkoutDescription")}</Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Ações rápidas</Text>
+        <View style={{ gap: 12 }}>
           <TouchableOpacity
-            style={[styles.primaryButton, { width: "48%" }]}
+            style={styles.primaryButton}
+            onPress={handleCompleteWorkout}
+            disabled={savingWorkout || isProgressComplete}
+          >
+            {savingWorkout ? (
+              <ActivityIndicator color="#111" />
+            ) : (
+              <Text style={styles.primaryButtonText}>{t("workout.complete")}</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.secondaryButton}
             onPress={() => handleAddProgress({ pushups: 20, situps: 20, squats: 20, runKm: 1 })}
             disabled={savingWorkout}
           >
-            <Text style={styles.primaryButtonText}>+20 / +1km</Text>
+            <Text style={styles.secondaryButtonText}>+20 / +1km</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.primaryButton, { width: "48%" }]}
+            style={styles.secondaryButton}
             onPress={() => handleAddProgress({ pushups: 50, situps: 50, squats: 50, runKm: 3 })}
             disabled={savingWorkout}
           >
-            <Text style={styles.primaryButtonText}>+50 / +3km</Text>
+            <Text style={styles.secondaryButtonText}>+50 / +3km</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={() => handleAddProgress({ pushups: 10, situps: 10, squats: 10, runKm: 0.5 })}
+            disabled={savingWorkout}
+          >
+            <Text style={styles.secondaryButtonText}>+10 / +0.5km</Text>
           </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          style={[styles.primaryButton, { width: "100%" }]}
-          onPress={handleCompleteWorkout}
-          disabled={savingWorkout}
-        >
-          {savingWorkout ? (
-            <ActivityIndicator color="#111" />
-          ) : (
-            <Text style={styles.primaryButtonText}>Completar Treino 100/100/100/10</Text>
-          )}
-        </TouchableOpacity>
       </View>
+
+      {isProgressComplete && (
+        <View style={[styles.card, styles.successCard]}>
+          <Text style={styles.cardTitle}>{t("workout.completedCongratulations")}</Text>
+          <Text style={styles.cardSubtitle}>{t("workout.keepPushing")}</Text>
+        </View>
+      )}
     </ScrollView>
   );
 
@@ -573,10 +629,6 @@ export default function LimiterBreakerApp() {
           ))
         )}
       </View>
-
-      <TouchableOpacity style={[styles.primaryButton, { marginHorizontal: 20 }]} onPress={handleLogout}>
-        <Text style={styles.primaryButtonText}>{t("common.logout")}</Text>
-      </TouchableOpacity>
     </ScrollView>
   );
 
@@ -584,6 +636,8 @@ export default function LimiterBreakerApp() {
     <SettingsScreen
       onViewCredits={() => setCurrentScreen("credits")}
       onLogout={handleLogout}
+      preferredWorkoutMode={effectiveWorkoutMode}
+      onChangeWorkoutMode={setWorkoutMode}
     />
   );
 
@@ -742,6 +796,11 @@ const styles = StyleSheet.create({
   successText: { color: colors.success },
   primaryButton: { alignSelf: "flex-start", marginTop: 14, backgroundColor: colors.yellow, borderRadius: 12, paddingVertical: 11, paddingHorizontal: 18 },
   primaryButtonText: { color: "#111", fontWeight: "900" },
+  secondaryButton: { alignSelf: "flex-start", marginTop: 12, backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 12, paddingVertical: 11, paddingHorizontal: 18, borderWidth: 1, borderColor: colors.border },
+  secondaryButtonText: { color: colors.text, fontWeight: "900" },
+  highlightCard: { backgroundColor: "rgba(255,214,0,0.12)", borderColor: "rgba(255,214,0,0.3)" },
+  successCard: { backgroundColor: "rgba(67,209,122,0.12)", borderColor: "rgba(67,209,122,0.3)" },
+  cardSubtitle: { color: colors.mutedText, marginTop: 6, lineHeight: 20 },
   bottomNav: { position: "absolute", left: 0, right: 0, bottom: 0, flexDirection: "row", justifyContent: "space-around", paddingTop: 10, paddingBottom: 16, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
   navButton: { alignItems: "center", gap: 2, minWidth: 70 },
   navIcon: { fontSize: 22 },

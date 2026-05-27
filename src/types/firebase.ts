@@ -9,6 +9,8 @@ export interface UserProfile {
   usernameLower: string;
   email: string;
   avatarUrl: string;
+  preferredWorkoutMode: WorkoutMode | null;
+  onboardingCompleted: boolean;
   currentStreak: number;
   bestStreak: number;
   totalTrainingDays: number;
@@ -36,7 +38,12 @@ export interface DailyProgress {
 export interface RankingUser {
   uid: string;
   displayName: string;
+  username?: string;
+  avatarEmoji?: string;
   currentStreak: number;
+  bestStreak?: number;
   totalExercises: number;
+  totalRunKm?: number;
+  isHero?: boolean;
   avatarUrl?: string;
 }

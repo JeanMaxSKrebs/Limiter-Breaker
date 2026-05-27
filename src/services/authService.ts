@@ -16,6 +16,7 @@ import {
 } from "firebase/firestore";
 
 import { auth, db } from "../config/firebase";
+import { WorkoutMode } from "../types/firebase";
 
 type RegisterUserData = {
   name: string;
@@ -47,8 +48,6 @@ function getChallengeDates() {
 
 export async function ensureUserProfile(user: User, extraData?: ExtraUserData) {
   const userRef = doc(db, "users", user.uid);
-  const userSnap = await getDoc(userRef);
-
   const { startDate, endDate } = getChallengeDates();
   const displayName = user.displayName || "Herói do Limite";
   const username = extraData?.username?.trim() || "";
@@ -61,6 +60,8 @@ export async function ensureUserProfile(user: User, extraData?: ExtraUserData) {
     usernameLower,
     email: user.email || "",
     avatarUrl: "",
+    preferredWorkoutMode: null,
+    onboardingCompleted: false,
     startDate,
     endDate,
     currentStreak: 0,
@@ -75,14 +76,34 @@ export async function ensureUserProfile(user: User, extraData?: ExtraUserData) {
     lastLoginAt: serverTimestamp(),
   };
 
-  if (userSnap.exists()) {
-    await updateDoc(userRef, {
-      ...profilePayload,
-      updatedAt: serverTimestamp(),
-      lastLoginAt: serverTimestamp(),
-    });
-  } else {
-    await setDoc(userRef, profilePayload);
+  const saveProfile = async () => {
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      await setDoc(
+        userRef,
+        {
+          ...profilePayload,
+          updatedAt: serverTimestamp(),
+          lastLoginAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } else {
+      await setDoc(userRef, profilePayload);
+    }
+  };
+
+  try {
+    await saveProfile();
+  } catch (error: any) {
+    if (error?.code !== "unavailable" && !String(error?.message).includes("offline")) {
+      throw error;
+    }
+    try {
+      await setDoc(userRef, profilePayload, { merge: true });
+    } catch {
+      // ignore offline write failure and let local auth flow continue
+    }
   }
 
   const globalRankingRef = doc(db, "rankings", "globalStreak", "users", user.uid);
@@ -96,10 +117,16 @@ export async function ensureUserProfile(user: User, extraData?: ExtraUserData) {
     updatedAt: serverTimestamp(),
   };
 
-  await Promise.all([
-    setDoc(globalRankingRef, rankingPayload, { merge: true }),
-    setDoc(totalRankingRef, rankingPayload, { merge: true }),
-  ]);
+  try {
+    await Promise.all([
+      setDoc(globalRankingRef, rankingPayload, { merge: true }),
+      setDoc(totalRankingRef, rankingPayload, { merge: true }),
+    ]);
+  } catch (error: any) {
+    if (error?.code !== "unavailable" && !String(error?.message).includes("offline")) {
+      throw error;
+    }
+  }
 }
 
 export async function registerWithEmail({
@@ -130,14 +157,36 @@ export async function loginWithEmail({ email, password }: LoginData) {
     password
   );
 
-  await ensureUserProfile(credential.user);
+  try {
+    await ensureUserProfile(credential.user);
+  } catch (error: any) {
+    if (error?.code !== "unavailable" && !String(error?.message).includes("offline")) {
+      throw error;
+    }
+  }
+
   const userRef = doc(db, "users", credential.user.uid);
-  await updateDoc(userRef, {
-    updatedAt: serverTimestamp(),
-    lastLoginAt: serverTimestamp(),
-  });
+  try {
+    await updateDoc(userRef, {
+      updatedAt: serverTimestamp(),
+      lastLoginAt: serverTimestamp(),
+    });
+  } catch (error: any) {
+    if (error?.code !== "unavailable" && !String(error?.message).includes("offline")) {
+      throw error;
+    }
+  }
 
   return credential.user;
+}
+
+export async function updateUserWorkoutMode(uid: string, mode: WorkoutMode) {
+  const userRef = doc(db, "users", uid);
+  await updateDoc(userRef, {
+    preferredWorkoutMode: mode,
+    onboardingCompleted: true,
+    updatedAt: serverTimestamp(),
+  });
 }
 
 export async function logout() {

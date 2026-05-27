@@ -11,9 +11,16 @@ import { useLocalization } from "../localization/LocalizationContext";
 interface SettingsScreenProps {
   onViewCredits: () => void;
   onLogout: () => void;
+  preferredWorkoutMode: "full" | "intercalated" | "super_intercalated" | null;
+  onChangeWorkoutMode: (mode: "full" | "intercalated" | "super_intercalated") => void;
 }
 
-export default function SettingsScreen({ onViewCredits, onLogout }: SettingsScreenProps) {
+export default function SettingsScreen({
+  onViewCredits,
+  onLogout,
+  preferredWorkoutMode,
+  onChangeWorkoutMode,
+}: SettingsScreenProps) {
   const { t, language, setLanguage } = useLocalization();
 
   const handleLanguageSelect = async (nextLanguage: "pt-BR" | "en-US") => {
@@ -46,6 +53,37 @@ export default function SettingsScreen({ onViewCredits, onLogout }: SettingsScre
             onPress={() => handleLanguageSelect("en-US")}
           >
             <Text style={[styles.optionText, language === "en-US" && styles.optionTextActive]}>{t("settings.english")}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>{t("settings.workoutMode")}</Text>
+        <Text style={styles.cardSubtitle}>{t("settings.workoutModeDescription")}</Text>
+        <View style={styles.optionList}>
+          <TouchableOpacity
+            style={[styles.optionButton, preferredWorkoutMode === "full" && styles.optionButtonActive]}
+            onPress={() => onChangeWorkoutMode("full")}
+          >
+            <Text style={[styles.optionText, preferredWorkoutMode === "full" && styles.optionTextActive]}>
+              {t("workout.fullWorkout")}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.optionButton, preferredWorkoutMode === "intercalated" && styles.optionButtonActive]}
+            onPress={() => onChangeWorkoutMode("intercalated")}
+          >
+            <Text style={[styles.optionText, preferredWorkoutMode === "intercalated" && styles.optionTextActive]}>
+              {t("workout.intercalatedWorkout")}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.optionButton, preferredWorkoutMode === "super_intercalated" && styles.optionButtonActive]}
+            onPress={() => onChangeWorkoutMode("super_intercalated")}
+          >
+            <Text style={[styles.optionText, preferredWorkoutMode === "super_intercalated" && styles.optionTextActive]}>
+              {t("workout.superIntercalated")}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>

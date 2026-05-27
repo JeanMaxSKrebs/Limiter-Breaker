@@ -22,32 +22,40 @@ function getDateId(date: Date): string {
 }
 
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
-  const userRef = doc(db, "users", uid);
-  const userSnap = await getDoc(userRef);
+  try {
+    const userRef = doc(db, "users", uid);
+    const userSnap = await getDoc(userRef);
 
-  if (!userSnap.exists()) {
+    if (!userSnap.exists()) {
+      return null;
+    }
+
+    return {
+      id: userSnap.id,
+      ...(userSnap.data() as UserProfile),
+    } as UserProfile;
+  } catch {
     return null;
   }
-
-  return {
-    id: userSnap.id,
-    ...(userSnap.data() as UserProfile),
-  } as UserProfile;
 }
 
 export async function getTodayProgress(uid: string): Promise<DailyProgress | null> {
-  const todayId = getTodayId();
-  const progressRef = doc(db, "users", uid, "dailyProgress", todayId);
-  const progressSnap = await getDoc(progressRef);
+  try {
+    const todayId = getTodayId();
+    const progressRef = doc(db, "users", uid, "dailyProgress", todayId);
+    const progressSnap = await getDoc(progressRef);
 
-  if (!progressSnap.exists()) {
+    if (!progressSnap.exists()) {
+      return null;
+    }
+
+    return {
+      id: progressSnap.id,
+      ...(progressSnap.data() as DailyProgress),
+    } as DailyProgress;
+  } catch {
     return null;
   }
-
-  return {
-    id: progressSnap.id,
-    ...(progressSnap.data() as DailyProgress),
-  } as DailyProgress;
 }
 
 export async function saveDailyProgress(uid: string, payload: Omit<DailyProgress, "id" | "createdAt" | "updatedAt">) {
@@ -161,14 +169,26 @@ export async function completeWorkout(uid: string, payload: { pushups: number; s
 
 export function listenUserProfile(uid: string, callback: (profile: UserProfile | null) => void) {
   const userRef = doc(db, "users", uid);
-  return onSnapshot(userRef, (snapshot) => {
-    callback(snapshot.exists() ? ({ id: snapshot.id, ...(snapshot.data() as UserProfile) } as UserProfile) : null);
-  });
+  return onSnapshot(
+    userRef,
+    (snapshot) => {
+      callback(snapshot.exists() ? ({ id: snapshot.id, ...(snapshot.data() as UserProfile) } as UserProfile) : null);
+    },
+    () => {
+      callback(null);
+    }
+  );
 }
 
 export function listenTodayProgress(uid: string, callback: (progress: DailyProgress | null) => void) {
   const progressRef = doc(db, "users", uid, "dailyProgress", getTodayId());
-  return onSnapshot(progressRef, (snapshot) => {
-    callback(snapshot.exists() ? ({ id: snapshot.id, ...(snapshot.data() as DailyProgress) } as DailyProgress) : null);
-  });
+  return onSnapshot(
+    progressRef,
+    (snapshot) => {
+      callback(snapshot.exists() ? ({ id: snapshot.id, ...(snapshot.data() as DailyProgress) } as DailyProgress) : null);
+    },
+    () => {
+      callback(null);
+    }
+  );
 }
