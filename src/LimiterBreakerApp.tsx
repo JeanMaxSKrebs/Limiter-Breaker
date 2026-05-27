@@ -158,6 +158,32 @@ export default function LimiterBreakerApp() {
     </View>
   );
 
+  const getWorkoutModeLabel = (mode: WorkoutMode) => {
+    switch (mode) {
+      case "full":
+        return t("workout.fullWorkout");
+      case "intercalated":
+        return t("workout.intercalatedWorkout");
+      case "super_intercalated":
+        return t("workout.superIntercalated");
+      default:
+        return t("workout.fullWorkout");
+    }
+  };
+
+  const getWorkoutModeDescription = (mode: WorkoutMode) => {
+    switch (mode) {
+      case "full":
+        return t("workout.fullWorkoutDescription");
+      case "intercalated":
+        return t("workout.intercalatedWorkoutDescription");
+      case "super_intercalated":
+        return t("workout.superIntercalatedDescription");
+      default:
+        return t("workout.fullWorkoutDescription");
+    }
+  };
+
   const isProgressComplete =
     todaySnapshot.pushups >= 100 &&
     todaySnapshot.situps >= 100 &&
@@ -423,27 +449,28 @@ export default function LimiterBreakerApp() {
 
       <View style={[styles.card, styles.highlightCard]}>
         <Text style={styles.cardTitle}>{t("workout.preferredMode")}</Text>
-        <Text style={styles.valueText}>{t(`workout.${effectiveWorkoutMode}`)}</Text>
+        <Text style={styles.valueText}>{getWorkoutModeLabel(effectiveWorkoutMode)}</Text>
+        <Text style={styles.cardSubtitle}>{getWorkoutModeDescription(effectiveWorkoutMode)}</Text>
       </View>
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{t("workout.subtitle")}</Text>
         <Text style={styles.muted}>{todayId}</Text>
         {renderProgressBar(progressPercent, true)}
-        <View style={styles.timelineGrid}>
-          <View>
+        <View style={styles.timelineGridLarge}>
+          <View style={styles.metricBox}>
             <Text style={styles.muted}>{t("workout.pushups")}</Text>
             <Text style={styles.valueText}>{todaySnapshot.pushups}/100</Text>
           </View>
-          <View>
+          <View style={styles.metricBox}>
             <Text style={styles.muted}>{t("workout.situps")}</Text>
             <Text style={styles.valueText}>{todaySnapshot.situps}/100</Text>
           </View>
-          <View>
+          <View style={styles.metricBox}>
             <Text style={styles.muted}>{t("workout.squats")}</Text>
             <Text style={styles.valueText}>{todaySnapshot.squats}/100</Text>
           </View>
-          <View>
+          <View style={styles.metricBox}>
             <Text style={styles.muted}>{t("workout.run")}</Text>
             <Text style={styles.valueText}>{todaySnapshot.runKm.toFixed(1)}/10 km</Text>
           </View>
@@ -456,41 +483,49 @@ export default function LimiterBreakerApp() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Ações rápidas</Text>
-        <View style={{ gap: 12 }}>
+        <Text style={styles.cardTitle}>{t("workout.quickActionsTitle")}</Text>
+        <View style={styles.buttonGrid}>
           <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={handleCompleteWorkout}
-            disabled={savingWorkout || isProgressComplete}
-          >
-            {savingWorkout ? (
-              <ActivityIndicator color="#111" />
-            ) : (
-              <Text style={styles.primaryButtonText}>{t("workout.complete")}</Text>
-            )}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => handleAddProgress({ pushups: 20, situps: 20, squats: 20, runKm: 1 })}
+            style={[styles.actionButton, styles.actionButtonOrange]}
+            onPress={() => handleAddProgress({ pushups: 10 })}
             disabled={savingWorkout}
           >
-            <Text style={styles.secondaryButtonText}>+20 / +1km</Text>
+            <Text style={styles.actionButtonText}>{t("workout.addPushups")}</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => handleAddProgress({ pushups: 50, situps: 50, squats: 50, runKm: 3 })}
+            style={[styles.actionButton, styles.actionButtonOrange]}
+            onPress={() => handleAddProgress({ situps: 10 })}
             disabled={savingWorkout}
           >
-            <Text style={styles.secondaryButtonText}>+50 / +3km</Text>
+            <Text style={styles.actionButtonText}>{t("workout.addSitups")}</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => handleAddProgress({ pushups: 10, situps: 10, squats: 10, runKm: 0.5 })}
+            style={[styles.actionButton, styles.actionButtonRed]}
+            onPress={() => handleAddProgress({ runKm: 1 })}
             disabled={savingWorkout}
           >
-            <Text style={styles.secondaryButtonText}>+10 / +0.5km</Text>
+            <Text style={styles.actionButtonText}>{t("workout.addRunKm")}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.actionButtonOrange]}
+            onPress={() => handleAddProgress({ squats: 20 })}
+            disabled={savingWorkout}
+          >
+            <Text style={styles.actionButtonText}>{t("workout.addSquats")}</Text>
           </TouchableOpacity>
         </View>
+
+        <TouchableOpacity
+          style={[styles.primaryButton, { width: "100%", marginTop: 14 }]}
+          onPress={handleCompleteWorkout}
+          disabled={savingWorkout || isProgressComplete}
+        >
+          {savingWorkout ? (
+            <ActivityIndicator color="#111" />
+          ) : (
+            <Text style={styles.primaryButtonText}>{t("workout.complete")}</Text>
+          )}
+        </TouchableOpacity>
       </View>
 
       {isProgressComplete && (
@@ -765,6 +800,13 @@ const styles = StyleSheet.create({
   workoutEmoji: { fontSize: 34, marginBottom: 10 },
   workoutTitle: { color: colors.text, fontSize: 26, fontWeight: "900" },
   workoutDescription: { color: colors.mutedText, marginTop: 6, marginBottom: 14, lineHeight: 20 },
+  buttonGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 },
+  actionButton: { flex: 1, minWidth: 140, paddingVertical: 14, paddingHorizontal: 12, borderRadius: 18, justifyContent: "center", alignItems: "center" },
+  actionButtonText: { color: "#111", fontWeight: "900", textAlign: "center" },
+  actionButtonOrange: { backgroundColor: "#ffd600" },
+  actionButtonRed: { backgroundColor: colors.red },
+  metricBox: { flex: 1, padding: 14, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.04)", borderWidth: 1, borderColor: colors.border, alignItems: "center" },
+  timelineGridLarge: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", marginTop: 16, gap: 10 },
   darkText: { color: "#161616" },
   darkMutedText: { color: "#2c2c2c" },
   detailList: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

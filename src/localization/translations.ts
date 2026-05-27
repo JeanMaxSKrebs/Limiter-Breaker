@@ -67,6 +67,11 @@ export const translations = {
       proTip: "Consistência é mais importante que sofrimento.",
       completedCongratulations: "Parabéns! Você concluiu o treino de hoje.",
       preferredMode: "Modo preferido",
+      quickActionsTitle: "Ações rápidas",
+      addPushups: "+10 Push-ups",
+      addSitups: "+10 Sit-ups",
+      addSquats: "+20 Squats",
+      addRunKm: "+1 km",
     },
     onboarding: {
       title: "Escolha seu caminho",
@@ -215,6 +220,11 @@ export const translations = {
       proTip: "Consistency matters more than pain.",
       completedCongratulations: "Great job! You've completed today's workout.",
       preferredMode: "Preferred mode",
+      quickActionsTitle: "Quick actions",
+      addPushups: "+10 Push-ups",
+      addSitups: "+10 Sit-ups",
+      addSquats: "+20 Squats",
+      addRunKm: "+1 km",
     },
     onboarding: {
       title: "Choose your path",
