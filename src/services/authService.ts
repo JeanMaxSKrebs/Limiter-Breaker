@@ -29,11 +29,14 @@ type LoginData = {
   password: string;
 };
 
+type ExtraUserData = {
+  username?: string;
+};
+
 function getChallengeDates() {
   const startDate = new Date();
   const endDate = new Date(startDate);
 
-  // Desafio de 3 anos
   endDate.setFullYear(endDate.getFullYear() + 3);
 
   return {
@@ -42,38 +45,61 @@ function getChallengeDates() {
   };
 }
 
-async function createUserProfile(user: User, name: string, username?: string) {
+export async function ensureUserProfile(user: User, extraData?: ExtraUserData) {
   const userRef = doc(db, "users", user.uid);
   const userSnap = await getDoc(userRef);
 
-  if (userSnap.exists()) {
-    return;
-  }
-
   const { startDate, endDate } = getChallengeDates();
+  const displayName = user.displayName || "Herói do Limite";
+  const username = extraData?.username?.trim() || "";
+  const usernameLower = username.toLowerCase();
 
-  await setDoc(userRef, {
+  const profilePayload = {
     uid: user.uid,
-    displayName: name,
-    username: username || "",
-    email: user.email,
+    displayName,
+    username,
+    usernameLower,
+    email: user.email || "",
     avatarUrl: "",
-
     startDate,
     endDate,
-
     currentStreak: 0,
     bestStreak: 0,
     totalTrainingDays: 0,
-
     totalPushups: 0,
     totalSitups: 0,
     totalSquats: 0,
     totalRunKm: 0,
-
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  });
+    lastLoginAt: serverTimestamp(),
+  };
+
+  if (userSnap.exists()) {
+    await updateDoc(userRef, {
+      ...profilePayload,
+      updatedAt: serverTimestamp(),
+      lastLoginAt: serverTimestamp(),
+    });
+  } else {
+    await setDoc(userRef, profilePayload);
+  }
+
+  const globalRankingRef = doc(db, "rankings", "globalStreak", "users", user.uid);
+  const totalRankingRef = doc(db, "rankings", "totalExercises", "users", user.uid);
+
+  const rankingPayload = {
+    uid: user.uid,
+    displayName,
+    currentStreak: 0,
+    totalExercises: 0,
+    updatedAt: serverTimestamp(),
+  };
+
+  await Promise.all([
+    setDoc(globalRankingRef, rankingPayload, { merge: true }),
+    setDoc(totalRankingRef, rankingPayload, { merge: true }),
+  ]);
 }
 
 export async function registerWithEmail({
@@ -92,7 +118,7 @@ export async function registerWithEmail({
     displayName: name,
   });
 
-  await createUserProfile(credential.user, name, username);
+  await ensureUserProfile(credential.user, { username });
 
   return credential.user;
 }
@@ -104,20 +130,12 @@ export async function loginWithEmail({ email, password }: LoginData) {
     password
   );
 
+  await ensureUserProfile(credential.user);
   const userRef = doc(db, "users", credential.user.uid);
-  const userSnap = await getDoc(userRef);
-
-  // Segurança caso o usuário exista no Auth, mas ainda não tenha documento no Firestore
-  if (!userSnap.exists()) {
-    await createUserProfile(
-      credential.user,
-      credential.user.displayName || "Novo Herói"
-    );
-  } else {
-    await updateDoc(userRef, {
-      updatedAt: serverTimestamp(),
-    });
-  }
+  await updateDoc(userRef, {
+    updatedAt: serverTimestamp(),
+    lastLoginAt: serverTimestamp(),
+  });
 
   return credential.user;
 }

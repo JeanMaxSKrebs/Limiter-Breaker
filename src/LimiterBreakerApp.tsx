@@ -1,5 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   SafeAreaView,
   ScrollView,
   StatusBar,
@@ -9,54 +11,106 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { User } from "firebase/auth";
+import AuthScreen from "./screens/AuthScreen";
+import { logout, listenAuthState } from "./services/authService";
+import {
+  completeWorkout,
+  getTodayId,
+  listenTodayProgress,
+  listenUserProfile,
+  saveDailyProgress,
+} from "./services/progressService";
+import {
+  listenGlobalStreakRanking,
+  listenTotalExercisesRanking,
+} from "./services/rankingService";
+import {
+  acceptFriendRequest,
+  listenFriendRequests,
+  listenFriends,
+  rejectFriendRequest,
+  searchUsersByUsername,
+  sendFriendRequest,
+} from "./services/friendsService";
+import {
+  DailyProgress,
+  RankingUser,
+  UserProfile,
+  WorkoutMode,
+} from "./types/firebase";
 
 type Screen = "home" | "workout" | "ranking" | "friends";
 type RankingTab = "streak" | "total";
-type WorkoutType = "single" | "intercalated";
 
-type LeaderboardUser = {
-  rank: number;
-  name: string;
-  avatar: string;
-  streak: number;
-  total: number;
-  isCurrentUser?: boolean;
+type FriendRequest = {
+  id: string;
+  fromUid: string;
+  toUid: string;
+  status: string;
 };
 
-const leaderboardStreak: LeaderboardUser[] = [
-  { rank: 1, name: "Saitama", avatar: "🟡", streak: 1095, total: 438000 },
-  { rank: 2, name: "Genos", avatar: "⚙️", streak: 365, total: 146000 },
-  { rank: 3, name: "You", avatar: "💪", streak: 127, total: 50800, isCurrentUser: true },
-  { rank: 4, name: "Mumen Rider", avatar: "🚴", streak: 89, total: 35600 },
-  { rank: 5, name: "Tank Top", avatar: "👕", streak: 67, total: 26800 },
-];
-
-const leaderboardTotal: LeaderboardUser[] = [
-  { rank: 1, name: "Saitama", avatar: "🟡", streak: 1095, total: 438000 },
-  { rank: 2, name: "Genos", avatar: "⚙️", streak: 365, total: 146000 },
-  { rank: 3, name: "Mumen Rider", avatar: "🚴", streak: 89, total: 89200 },
-  { rank: 4, name: "You", avatar: "💪", streak: 127, total: 50800, isCurrentUser: true },
-  { rank: 5, name: "Tank Top", avatar: "👕", streak: 67, total: 26800 },
-];
-
-const friends = [
-  { name: "Genos", avatar: "⚙️", progress: 100, status: "Completed today" },
-  { name: "Mumen Rider", avatar: "🚴", progress: 50, status: "In progress" },
-  { name: "Tank Top", avatar: "👕", progress: 25, status: "Just started" },
-  { name: "Speed-o'-Sound", avatar: "⚡", progress: 0, status: "Not started" },
-];
-
-const exercises = [
-  { label: "Push-ups", value: "75/100" },
-  { label: "Sit-ups", value: "100/100", completed: true },
-  { label: "Squats", value: "50/100" },
-  { label: "Run", value: "7.5/10 km" },
-];
+type FriendItem = {
+  id: string;
+  uid: string;
+  displayName: string;
+  status: string;
+};
 
 export default function LimiterBreakerApp() {
+  const [user, setUser] = useState<User | null>(null);
+  const [initializing, setInitializing] = useState(true);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [todayProgress, setTodayProgress] = useState<DailyProgress | null>(null);
   const [currentScreen, setCurrentScreen] = useState<Screen>("home");
   const [rankingTab, setRankingTab] = useState<RankingTab>("streak");
-  const [workoutFilter, setWorkoutFilter] = useState<WorkoutType>("single");
+  const [workoutMode, setWorkoutMode] = useState<WorkoutMode>("full");
+  const [globalRanking, setGlobalRanking] = useState<RankingUser[]>([]);
+  const [totalRanking, setTotalRanking] = useState<RankingUser[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
+  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
+  const [friendsList, setFriendsList] = useState<FriendItem[]>([]);
+  const [savingWorkout, setSavingWorkout] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = listenAuthState((authUser) => {
+      setUser(authUser);
+      setInitializing(false);
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setProfile(null);
+      setTodayProgress(null);
+      setGlobalRanking([]);
+      setTotalRanking([]);
+      setSearchResults([]);
+      setFriendRequests([]);
+      setFriendsList([]);
+      return;
+    }
+
+    const unsubProfile = listenUserProfile(user.uid, setProfile);
+    const unsubProgress = listenTodayProgress(user.uid, setTodayProgress);
+    const unsubGlobal = listenGlobalStreakRanking(setGlobalRanking);
+    const unsubTotal = listenTotalExercisesRanking(setTotalRanking);
+    const unsubRequests = listenFriendRequests(user.uid, setFriendRequests);
+    const unsubFriends = listenFriends(user.uid, setFriendsList);
+
+    return () => {
+      unsubProfile();
+      unsubProgress();
+      unsubGlobal();
+      unsubTotal();
+      unsubRequests();
+      unsubFriends();
+    };
+  }, [user]);
+
+  const todayId = getTodayId();
 
   const challenge = useMemo(() => {
     const startDate = new Date("2024-01-01T00:00:00");
@@ -74,11 +128,170 @@ export default function LimiterBreakerApp() {
     };
   }, []);
 
+  const todaySnapshot: DailyProgress = todayProgress || {
+    id: todayId,
+    date: todayId,
+    pushups: 0,
+    situps: 0,
+    squats: 0,
+    runKm: 0,
+    completed: false,
+    createdAt: null,
+    updatedAt: null,
+  };
+
   const renderProgressBar = (value: number, large = false) => (
     <View style={[styles.progressTrack, large && styles.progressTrackLarge]}>
       <View style={[styles.progressFill, { width: `${Math.max(0, Math.min(100, value))}%` }]} />
     </View>
   );
+
+  const isProgressComplete =
+    todaySnapshot.pushups >= 100 &&
+    todaySnapshot.situps >= 100 &&
+    todaySnapshot.squats >= 100 &&
+    todaySnapshot.runKm >= 10;
+
+  const progressPercent = Math.round(
+    Math.min(
+      100,
+      ((Math.min(100, todaySnapshot.pushups) / 100 +
+        Math.min(100, todaySnapshot.situps) / 100 +
+        Math.min(100, todaySnapshot.squats) / 100 +
+        Math.min(10, todaySnapshot.runKm) / 10) / 4) * 100
+    )
+  );
+
+  const totalExercises = profile
+    ? profile.totalPushups + profile.totalSitups + profile.totalSquats + profile.totalRunKm
+    : 0;
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error: any) {
+      Alert.alert("Erro", error?.message || "Não foi possível sair.");
+    }
+  };
+
+  const handleAddProgress = async (delta: {
+    pushups?: number;
+    situps?: number;
+    squats?: number;
+    runKm?: number;
+  }) => {
+    if (!user) {
+      return;
+    }
+
+    setSavingWorkout(true);
+    try {
+      const updated = {
+        date: todayId,
+        pushups: Math.max(0, Math.min(999, todaySnapshot.pushups + (delta.pushups || 0))),
+        situps: Math.max(0, Math.min(999, todaySnapshot.situps + (delta.situps || 0))),
+        squats: Math.max(0, Math.min(999, todaySnapshot.squats + (delta.squats || 0))),
+        runKm: Math.max(0, todaySnapshot.runKm + (delta.runKm || 0)),
+        completed:
+          Math.max(0, todaySnapshot.pushups + (delta.pushups || 0)) >= 100 &&
+          Math.max(0, todaySnapshot.situps + (delta.situps || 0)) >= 100 &&
+          Math.max(0, todaySnapshot.squats + (delta.squats || 0)) >= 100 &&
+          Math.max(0, todaySnapshot.runKm + (delta.runKm || 0)) >= 10,
+      };
+
+      await saveDailyProgress(user.uid, updated);
+    } catch (error: any) {
+      Alert.alert("Erro", error?.message || "Falha ao salvar progresso.");
+    } finally {
+      setSavingWorkout(false);
+    }
+  };
+
+  const handleCompleteWorkout = async () => {
+    if (!user) {
+      return;
+    }
+
+    setSavingWorkout(true);
+    try {
+      await completeWorkout(user.uid, {
+        pushups: 100,
+        situps: 100,
+        squats: 100,
+        runKm: 10,
+      });
+      Alert.alert("Treino completo", "Seu progresso foi atualizado.");
+    } catch (error: any) {
+      Alert.alert("Erro", error?.message || "Falha ao completar treino.");
+    } finally {
+      setSavingWorkout(false);
+    }
+  };
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) {
+      return;
+    }
+
+    try {
+      const results = await searchUsersByUsername(searchQuery);
+      setSearchResults(results.filter((item) => item.uid !== user?.uid));
+    } catch (error: any) {
+      Alert.alert("Erro", error?.message || "Falha ao buscar usuário.");
+    }
+  };
+
+  const handleSendRequest = async (uid: string) => {
+    if (!user) {
+      return;
+    }
+
+    try {
+      await sendFriendRequest(user.uid, uid);
+      Alert.alert("Solicitação enviada", "Sua solicitação de amizade foi registrada.");
+    } catch (error: any) {
+      Alert.alert("Erro", error?.message || "Não foi possível enviar a solicitação.");
+    }
+  };
+
+  const handleAccept = async (request: FriendRequest) => {
+    if (!user) {
+      return;
+    }
+
+    try {
+      await acceptFriendRequest(request.id, request.fromUid, user.uid);
+      Alert.alert("Amizade aceita", "Você agora é amigo desse usuário.");
+    } catch (error: any) {
+      Alert.alert("Erro", error?.message || "Falha ao aceitar solicitação.");
+    }
+  };
+
+  const handleReject = async (requestId: string) => {
+    try {
+      await rejectFriendRequest(requestId);
+      Alert.alert("Solicitação rejeitada", "A solicitação foi rejeitada.");
+    } catch (error: any) {
+      Alert.alert("Erro", error?.message || "Falha ao rejeitar solicitação.");
+    }
+  };
+
+  if (initializing) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={[styles.container, styles.centeredContainer]}>
+          <ActivityIndicator size="large" color="#ffd600" />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!user) {
+    return <AuthScreen />;
+  }
+
+  const profileName = profile?.displayName || "Herói";
+  const usernameLabel = profile?.username ? `@${profile.username}` : "";
 
   const renderHomeScreen = () => (
     <ScrollView contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
@@ -87,6 +300,14 @@ export default function LimiterBreakerApp() {
         <Text style={styles.heroTitle}>BREAK YOUR</Text>
         <Text style={styles.heroTitleAccent}>LIMITER</Text>
         <Text style={styles.heroSubtitle}>Saitama's 3-Year Challenge</Text>
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.rowBetweenInside}>
+          <Text style={styles.cardTitle}>Olá, {profileName}</Text>
+          <Text style={styles.muted}>{usernameLabel}</Text>
+        </View>
+        <Text style={[styles.muted, { marginTop: 12 }]}>Último login: {profile?.lastLoginAt ? new Date(profile.lastLoginAt.seconds * 1000).toLocaleString() : "—"}</Text>
       </View>
 
       <View style={styles.card}>
@@ -114,19 +335,23 @@ export default function LimiterBreakerApp() {
       <View style={styles.card}>
         <View style={styles.rowBetweenInside}>
           <Text style={styles.cardTitle}>🎯 Today's Training</Text>
-          <Text style={styles.bigAccent}>75%</Text>
+          <Text style={styles.accentText}>{progressPercent}%</Text>
         </View>
         <View style={styles.circleProgress}>
           <Text style={styles.circleEmoji}>🔥</Text>
-          <Text style={styles.circlePercent}>75%</Text>
-          <Text style={styles.muted}>Keep pushing!</Text>
+          <Text style={styles.circlePercent}>{progressPercent}%</Text>
+          <Text style={styles.muted}>{isProgressComplete ? "Treino completo" : "Continue assim"}</Text>
         </View>
         <View style={styles.exerciseGrid}>
-          {exercises.map((item) => (
+          {[
+            { label: "Push-ups", value: `${todaySnapshot.pushups}/100` },
+            { label: "Sit-ups", value: `${todaySnapshot.situps}/100` },
+            { label: "Squats", value: `${todaySnapshot.squats}/100` },
+            { label: "Run", value: `${todaySnapshot.runKm.toFixed(1)}/10 km` },
+          ].map((item) => (
             <View key={item.label} style={styles.exerciseBox}>
               <Text style={styles.muted}>{item.label}</Text>
               <Text style={styles.exerciseValue}>{item.value}</Text>
-              {item.completed && <Text style={styles.completed}>✓ Complete</Text>}
             </View>
           ))}
         </View>
@@ -135,18 +360,18 @@ export default function LimiterBreakerApp() {
       <View style={styles.statsRow}>
         <View style={styles.smallCard}>
           <Text style={styles.statEmoji}>🔥</Text>
-          <Text style={styles.statNumber}>127</Text>
+          <Text style={styles.statNumber}>{profile?.currentStreak ?? 0}</Text>
           <Text style={styles.mutedSmall}>Day Streak</Text>
         </View>
         <View style={styles.smallCard}>
           <Text style={styles.statEmoji}>📈</Text>
-          <Text style={styles.statNumber}>50.8K</Text>
-          <Text style={styles.mutedSmall}>Total Reps</Text>
+          <Text style={styles.statNumber}>{Math.round(totalExercises)}</Text>
+          <Text style={styles.mutedSmall}>Total Exercises</Text>
         </View>
         <View style={styles.smallCard}>
           <Text style={styles.statEmoji}>🏆</Text>
-          <Text style={styles.statNumber}>#3</Text>
-          <Text style={styles.mutedSmall}>Rank</Text>
+          <Text style={styles.statNumber}>{profile?.bestStreak ?? 0}</Text>
+          <Text style={styles.mutedSmall}>Best Streak</Text>
         </View>
       </View>
     </ScrollView>
@@ -154,78 +379,118 @@ export default function LimiterBreakerApp() {
 
   const renderWorkoutScreen = () => (
     <ScrollView contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
-      <Header emoji="🏋️" title="CHOOSE YOUR" titleAccent="TRAINING MODE" subtitle="Saitama's legendary routine awaits" />
+      <Header emoji="🏋️" title="WORKOUT" subtitle="Complete seu treino do dia" />
 
-      <WorkoutCard
-        emoji="⚡"
-        title="FULL WORKOUT"
-        description="Complete all exercises in one session. For the truly dedicated."
-        variant="red"
-        details={["100 Push-ups", "100 Sit-ups", "100 Squats", "10 km Run"]}
-      />
-      <WorkoutCard
-        emoji="⏰"
-        title="INTERCALATED WORKOUT"
-        description="Split the routine into different times. Balance strength and stamina."
-        variant="yellow"
-        details={["Morning: 50 Push + 50 Sit-ups", "Afternoon: 50 Squats + 5 km", "Evening: Remaining + 5 km"]}
-      />
-      <WorkoutCard
-        emoji="⏱️"
-        title="SUPER INTERCALATED"
-        description="Break it down into smaller sets throughout the day. Perfect for beginners."
-        details={["Every 2 hours", "10-20 reps each", "6-8 sessions per day"]}
-      />
+      <View style={styles.segmentedControl}>
+        <SegmentButton active={workoutMode === "full"} label="FULL" onPress={() => setWorkoutMode("full")} />
+        <SegmentButton active={workoutMode === "intercalated"} label="INTERCALATED" onPress={() => setWorkoutMode("intercalated")} />
+        <SegmentButton active={workoutMode === "super_intercalated"} label="SUPER" onPress={() => setWorkoutMode("super_intercalated")} />
+      </View>
 
-      <View style={styles.tipBox}>
-        <Text style={styles.tipTitle}>💡 Pro Tip</Text>
-        <Text style={styles.muted}>Consistency is more important than suffering. Build the habit first.</Text>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Seu progresso hoje</Text>
+        <Text style={styles.muted}>{todayId}</Text>
+        {renderProgressBar(progressPercent, true)}
+        <View style={styles.timelineGrid}>
+          <View>
+            <Text style={styles.muted}>Push-ups</Text>
+            <Text style={styles.valueText}>{todaySnapshot.pushups}/100</Text>
+          </View>
+          <View>
+            <Text style={styles.muted}>Sit-ups</Text>
+            <Text style={styles.valueText}>{todaySnapshot.situps}/100</Text>
+          </View>
+          <View>
+            <Text style={styles.muted}>Squats</Text>
+            <Text style={styles.valueText}>{todaySnapshot.squats}/100</Text>
+          </View>
+          <View>
+            <Text style={styles.muted}>Run</Text>
+            <Text style={styles.valueText}>{todaySnapshot.runKm.toFixed(1)}/10 km</Text>
+          </View>
+        </View>
+
+        <View style={styles.rowBetweenInside}>
+          <TouchableOpacity
+            style={[styles.primaryButton, { width: "48%" }]}
+            onPress={() => handleAddProgress({ pushups: 20, situps: 20, squats: 20, runKm: 1 })}
+            disabled={savingWorkout}
+          >
+            <Text style={styles.primaryButtonText}>+20 / +1km</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.primaryButton, { width: "48%" }]}
+            onPress={() => handleAddProgress({ pushups: 50, situps: 50, squats: 50, runKm: 3 })}
+            disabled={savingWorkout}
+          >
+            <Text style={styles.primaryButtonText}>+50 / +3km</Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.primaryButton, { width: "100%" }]}
+          onPress={handleCompleteWorkout}
+          disabled={savingWorkout}
+        >
+          {savingWorkout ? (
+            <ActivityIndicator color="#111" />
+          ) : (
+            <Text style={styles.primaryButtonText}>Completar Treino 100/100/100/10</Text>
+          )}
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
 
   const renderRankingScreen = () => {
-    const currentLeaderboard = rankingTab === "streak" ? leaderboardStreak : leaderboardTotal;
+    const currentLeaderboard = rankingTab === "streak" ? globalRanking : totalRanking;
 
     return (
       <ScrollView contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
-        <Header emoji="🏆" title="LEADERBOARD" subtitle="Compete with heroes worldwide" />
+        <Header emoji="🏆" title="RANKING" subtitle="Veja os melhores do momento" />
 
         <View style={styles.segmentedControl}>
-          <SegmentButton active={rankingTab === "streak"} label="🔥 Consecutive Days" onPress={() => setRankingTab("streak")} />
-          <SegmentButton active={rankingTab === "total"} label="🎯 Total Exercises" onPress={() => setRankingTab("total")} />
+          <SegmentButton active={rankingTab === "streak"} label="🔥 Dias" onPress={() => setRankingTab("streak")} />
+          <SegmentButton active={rankingTab === "total"} label="🎯 Total" onPress={() => setRankingTab("total")} />
         </View>
 
-        <View style={styles.filterControl}>
-          <SegmentButton active={workoutFilter === "single"} label="Single Workout" onPress={() => setWorkoutFilter("single")} small />
-          <SegmentButton active={workoutFilter === "intercalated"} label="Intercalated" onPress={() => setWorkoutFilter("intercalated")} small />
-        </View>
-
-        {currentLeaderboard.map((user) => (
-          <View key={user.name} style={[styles.leaderCard, user.isCurrentUser && styles.currentUserCard]}>
-            <View style={styles.rankBadge}>
-              <Text style={styles.rankText}>{user.rank}</Text>
-            </View>
-            <Text style={styles.avatar}>{user.avatar}</Text>
-            <View style={styles.flex1}>
-              <Text style={styles.userName}>{user.name} {user.isCurrentUser ? "• You" : ""}</Text>
-              <Text style={styles.muted}>{rankingTab === "streak" ? `${user.streak} day streak` : `${user.total.toLocaleString()} total reps`}</Text>
-            </View>
-            <Text style={styles.leaderValue}>{rankingTab === "streak" ? user.streak : user.total.toLocaleString()}</Text>
+        {currentLeaderboard.length === 0 ? (
+          <View style={[styles.card, { marginTop: 20 }]}> 
+            <Text style={styles.muted}>Carregando ranking...</Text>
           </View>
-        ))}
+        ) : (
+          currentLeaderboard.map((item, index) => (
+            <View key={item.uid} style={[styles.leaderCard, item.uid === user.uid && styles.currentUserCard]}>
+              <View style={styles.rankBadge}>
+                <Text style={styles.rankText}>{index + 1}</Text>
+              </View>
+              <Text style={styles.avatar}>💪</Text>
+              <View style={styles.flex1}>
+                <Text style={styles.userName}>{item.displayName}</Text>
+                <Text style={styles.muted}>
+                  {rankingTab === "streak"
+                    ? `${item.currentStreak} dia(s)`
+                    : `${Math.round(item.totalExercises)} pts`}
+                </Text>
+              </View>
+              <Text style={styles.leaderValue}>
+                {rankingTab === "streak" ? item.currentStreak : Math.round(item.totalExercises)}
+              </Text>
+            </View>
+          ))
+        )}
 
         <View style={styles.performanceCard}>
-          <Text style={styles.cardTitle}>Your Performance</Text>
+          <Text style={styles.cardTitle}>Seu desempenho</Text>
           <View style={styles.statsRowNoMargin}>
             <View style={styles.performanceItem}>
               <Text style={styles.statEmoji}>🔥</Text>
-              <Text style={styles.statNumber}>127</Text>
+              <Text style={styles.statNumber}>{profile?.currentStreak ?? 0}</Text>
               <Text style={styles.mutedSmall}>Current Streak</Text>
             </View>
             <View style={styles.performanceItem}>
               <Text style={styles.statEmoji}>🎯</Text>
-              <Text style={styles.statNumber}>50.8K</Text>
+              <Text style={styles.statNumber}>{Math.round(totalExercises)}</Text>
               <Text style={styles.mutedSmall}>Total Exercises</Text>
             </View>
           </View>
@@ -236,39 +501,78 @@ export default function LimiterBreakerApp() {
 
   const renderFriendsScreen = () => (
     <ScrollView contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
-      <Header emoji="👥" title="FRIENDS" subtitle="Train together, grow stronger" />
+      <Header emoji="👥" title="FRIENDS" subtitle="Treine junto com seus amigos" />
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>➕ Add Friends</Text>
-        <TextInput placeholder="Search by username or email" placeholderTextColor="#8f8f99" style={styles.input} />
-      </View>
-
-      <View style={styles.rowBetweenOutside}>
-        <Text style={styles.cardTitle}>Your Squad ({friends.length})</Text>
-        <Text style={styles.muted}>Active today: 2</Text>
-      </View>
-
-      {friends.map((friend) => (
-        <View key={friend.name} style={styles.friendCard}>
-          <View style={styles.rowCenter}>
-            <Text style={styles.avatarLarge}>{friend.avatar}</Text>
-            <View style={styles.flex1}>
-              <Text style={styles.userName}>{friend.name}</Text>
-              <Text style={styles.muted}>🏃 {friend.status}</Text>
-            </View>
-            <Text style={[styles.leaderValue, friend.progress === 100 && styles.successText]}>{friend.progress}%</Text>
-          </View>
-          {renderProgressBar(friend.progress)}
-        </View>
-      ))}
-
-      <View style={styles.performanceCard}>
-        <Text style={styles.cardTitle}>🔥 Challenge Your Friends!</Text>
-        <Text style={styles.muted}>Invite friends to join the 3-year challenge. Those who train together, break their limiters together!</Text>
-        <TouchableOpacity style={styles.primaryButton}>
-          <Text style={styles.primaryButtonText}>Send Invite</Text>
+        <Text style={styles.cardTitle}>Pesquisar usuário</Text>
+        <TextInput
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Digite o username"
+          placeholderTextColor="#8f8f99"
+          style={styles.input}
+        />
+        <TouchableOpacity style={styles.primaryButton} onPress={handleSearch}>
+          <Text style={styles.primaryButtonText}>Buscar</Text>
         </TouchableOpacity>
       </View>
+
+      {searchResults.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Resultados</Text>
+          {searchResults.map((result) => (
+            <View key={result.uid} style={[styles.friendCard, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}>
+              <View>
+                <Text style={styles.userName}>{result.displayName}</Text>
+                <Text style={styles.muted}>@{result.username}</Text>
+              </View>
+              <TouchableOpacity style={styles.primaryButton} onPress={() => handleSendRequest(result.uid)}>
+                <Text style={styles.primaryButtonText}>Enviar</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {friendRequests.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Solicitações</Text>
+          {friendRequests.map((request) => (
+            <View key={request.id} style={[styles.friendCard, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}>
+              <View>
+                <Text style={styles.userName}>Solicitação de {request.fromUid}</Text>
+                <Text style={styles.muted}>{request.status}</Text>
+              </View>
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <TouchableOpacity style={[styles.primaryButton, { paddingHorizontal: 12 }]} onPress={() => handleAccept(request)}>
+                  <Text style={styles.primaryButtonText}>Aceitar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.primaryButton, { paddingHorizontal: 12, backgroundColor: colors.red }]} onPress={() => handleReject(request.id)}>
+                  <Text style={styles.primaryButtonText}>Rejeitar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Amigos</Text>
+        {friendsList.length === 0 ? (
+          <Text style={styles.muted}>Nenhum amigo ainda. Encontre alguém para treinar com você.</Text>
+        ) : (
+          friendsList.map((friend) => (
+            <View key={friend.id} style={styles.friendCard}>
+              <Text style={styles.userName}>{friend.displayName || friend.uid}</Text>
+              <Text style={styles.muted}>{friend.status}</Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      <TouchableOpacity style={[styles.primaryButton, { marginHorizontal: 20 }]} onPress={handleLogout}>
+        <Text style={styles.primaryButtonText}>Sair</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 
@@ -294,21 +598,6 @@ function Header({ emoji, title, titleAccent, subtitle }: { emoji: string; title:
       {titleAccent && <Text style={styles.headerTitleAccent}>{titleAccent}</Text>}
       <Text style={styles.headerSubtitle}>{subtitle}</Text>
     </View>
-  );
-}
-
-function WorkoutCard({ emoji, title, description, details, variant }: { emoji: string; title: string; description: string; details: string[]; variant?: "red" | "yellow" }) {
-  return (
-    <TouchableOpacity style={[styles.workoutCard, variant === "red" && styles.workoutCardRed, variant === "yellow" && styles.workoutCardYellow]} activeOpacity={0.85}>
-      <Text style={styles.workoutEmoji}>{emoji}</Text>
-      <Text style={[styles.workoutTitle, variant && styles.darkText]}>{title}</Text>
-      <Text style={[styles.workoutDescription, variant && styles.darkMutedText]}>{description}</Text>
-      <View style={styles.detailList}>
-        {details.map((item) => (
-          <Text key={item} style={[styles.detailPill, variant && styles.lightPill]}>{item}</Text>
-        ))}
-      </View>
-    </TouchableOpacity>
   );
 }
 
@@ -358,6 +647,7 @@ const colors = {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.background },
   container: { flex: 1, backgroundColor: colors.background },
+  centeredContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   screenContent: { paddingBottom: 110 },
   hero: { minHeight: 245, padding: 24, justifyContent: "center", backgroundColor: "#2a2020" },
   heroEmoji: { fontSize: 64, marginBottom: 8 },

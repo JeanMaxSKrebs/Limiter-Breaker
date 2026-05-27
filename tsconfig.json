@@ -1,4 +1,11 @@
 {
   "compilerOptions": {},
   "extends": "expo/tsconfig.base"
+  ,
+  "exclude": [
+    "vite.config.ts",
+    "src/main.tsx",
+    "node_modules",
+    "dist"
+  ]
 }
