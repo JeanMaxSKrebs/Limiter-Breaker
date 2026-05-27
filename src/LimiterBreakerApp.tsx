@@ -13,6 +13,9 @@ import {
 } from "react-native";
 import { User } from "firebase/auth";
 import AuthScreen from "./screens/AuthScreen";
+import SettingsScreen from "./screens/SettingsScreen";
+import CreditsScreen from "./screens/CreditsScreen";
+import { useLocalization } from "./localization/LocalizationContext";
 import { logout, listenAuthState } from "./services/authService";
 import {
   completeWorkout,
@@ -40,7 +43,7 @@ import {
   WorkoutMode,
 } from "./types/firebase";
 
-type Screen = "home" | "workout" | "ranking" | "friends";
+type Screen = "home" | "workout" | "ranking" | "friends" | "settings" | "credits";
 type RankingTab = "streak" | "total";
 
 type FriendRequest = {
@@ -72,6 +75,7 @@ export default function LimiterBreakerApp() {
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [friendsList, setFriendsList] = useState<FriendItem[]>([]);
   const [savingWorkout, setSavingWorkout] = useState(false);
+  const { t } = useLocalization();
 
   useEffect(() => {
     const unsubscribe = listenAuthState((authUser) => {
@@ -170,7 +174,7 @@ export default function LimiterBreakerApp() {
     try {
       await logout();
     } catch (error: any) {
-      Alert.alert("Erro", error?.message || "Não foi possível sair.");
+      Alert.alert(t("common.error"), error?.message || t("common.error"));
     }
   };
 
@@ -447,16 +451,16 @@ export default function LimiterBreakerApp() {
 
     return (
       <ScrollView contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
-        <Header emoji="🏆" title="RANKING" subtitle="Veja os melhores do momento" />
+        <Header emoji="🏆" title={t("ranking.title")} subtitle={t("ranking.subtitle")} />
 
         <View style={styles.segmentedControl}>
-          <SegmentButton active={rankingTab === "streak"} label="🔥 Dias" onPress={() => setRankingTab("streak")} />
-          <SegmentButton active={rankingTab === "total"} label="🎯 Total" onPress={() => setRankingTab("total")} />
+          <SegmentButton active={rankingTab === "streak"} label={`🔥 ${t("ranking.consecutiveDays")}`} onPress={() => setRankingTab("streak")} />
+          <SegmentButton active={rankingTab === "total"} label={`🎯 ${t("ranking.totalExercises")}`} onPress={() => setRankingTab("total")} />
         </View>
 
         {currentLeaderboard.length === 0 ? (
           <View style={[styles.card, { marginTop: 20 }]}> 
-            <Text style={styles.muted}>Carregando ranking...</Text>
+            <Text style={styles.muted}>{t("common.loading")}</Text>
           </View>
         ) : (
           currentLeaderboard.map((item, index) => (
@@ -481,17 +485,17 @@ export default function LimiterBreakerApp() {
         )}
 
         <View style={styles.performanceCard}>
-          <Text style={styles.cardTitle}>Seu desempenho</Text>
+          <Text style={styles.cardTitle}>{t("ranking.yourPerformance")}</Text>
           <View style={styles.statsRowNoMargin}>
             <View style={styles.performanceItem}>
               <Text style={styles.statEmoji}>🔥</Text>
               <Text style={styles.statNumber}>{profile?.currentStreak ?? 0}</Text>
-              <Text style={styles.mutedSmall}>Current Streak</Text>
+              <Text style={styles.mutedSmall}>{t("ranking.currentStreak")}</Text>
             </View>
             <View style={styles.performanceItem}>
               <Text style={styles.statEmoji}>🎯</Text>
               <Text style={styles.statNumber}>{Math.round(totalExercises)}</Text>
-              <Text style={styles.mutedSmall}>Total Exercises</Text>
+              <Text style={styles.mutedSmall}>{t("ranking.totalExercises")}</Text>
             </View>
           </View>
         </View>
@@ -501,33 +505,33 @@ export default function LimiterBreakerApp() {
 
   const renderFriendsScreen = () => (
     <ScrollView contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
-      <Header emoji="👥" title="FRIENDS" subtitle="Treine junto com seus amigos" />
+      <Header emoji="👥" title={t("friends.title")} subtitle={t("friends.subtitle")} />
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Pesquisar usuário</Text>
+        <Text style={styles.cardTitle}>{t("friends.addFriends")}</Text>
         <TextInput
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Digite o username"
+          placeholder={t("friends.searchPlaceholder")}
           placeholderTextColor="#8f8f99"
           style={styles.input}
         />
         <TouchableOpacity style={styles.primaryButton} onPress={handleSearch}>
-          <Text style={styles.primaryButtonText}>Buscar</Text>
+          <Text style={styles.primaryButtonText}>{t("friends.sendInvite")}</Text>
         </TouchableOpacity>
       </View>
 
       {searchResults.length > 0 && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Resultados</Text>
+          <Text style={styles.cardTitle}>{t("common.results")}</Text>
           {searchResults.map((result) => (
-            <View key={result.uid} style={[styles.friendCard, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}>
+            <View key={result.uid} style={[styles.friendCard, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}> 
               <View>
                 <Text style={styles.userName}>{result.displayName}</Text>
                 <Text style={styles.muted}>@{result.username}</Text>
               </View>
               <TouchableOpacity style={styles.primaryButton} onPress={() => handleSendRequest(result.uid)}>
-                <Text style={styles.primaryButtonText}>Enviar</Text>
+                <Text style={styles.primaryButtonText}>{t("friends.sendInvite")}</Text>
               </TouchableOpacity>
             </View>
           ))}
@@ -536,19 +540,19 @@ export default function LimiterBreakerApp() {
 
       {friendRequests.length > 0 && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Solicitações</Text>
+          <Text style={styles.cardTitle}>{t("friends.requests")}</Text>
           {friendRequests.map((request) => (
-            <View key={request.id} style={[styles.friendCard, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}>
+            <View key={request.id} style={[styles.friendCard, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}> 
               <View>
-                <Text style={styles.userName}>Solicitação de {request.fromUid}</Text>
+                <Text style={styles.userName}>{`${t("friends.requestFrom")} ${request.fromUid}`}</Text>
                 <Text style={styles.muted}>{request.status}</Text>
               </View>
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <TouchableOpacity style={[styles.primaryButton, { paddingHorizontal: 12 }]} onPress={() => handleAccept(request)}>
-                  <Text style={styles.primaryButtonText}>Aceitar</Text>
+                  <Text style={styles.primaryButtonText}>{t("friends.accept")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.primaryButton, { paddingHorizontal: 12, backgroundColor: colors.red }]} onPress={() => handleReject(request.id)}>
-                  <Text style={styles.primaryButtonText}>Rejeitar</Text>
+                  <Text style={styles.primaryButtonText}>{t("friends.reject")}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -557,9 +561,9 @@ export default function LimiterBreakerApp() {
       )}
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Amigos</Text>
+        <Text style={styles.cardTitle}>{t("friends.yourSquad")}</Text>
         {friendsList.length === 0 ? (
-          <Text style={styles.muted}>Nenhum amigo ainda. Encontre alguém para treinar com você.</Text>
+          <Text style={styles.muted}>{t("friends.noFriendsYet")}</Text>
         ) : (
           friendsList.map((friend) => (
             <View key={friend.id} style={styles.friendCard}>
@@ -571,9 +575,20 @@ export default function LimiterBreakerApp() {
       </View>
 
       <TouchableOpacity style={[styles.primaryButton, { marginHorizontal: 20 }]} onPress={handleLogout}>
-        <Text style={styles.primaryButtonText}>Sair</Text>
+        <Text style={styles.primaryButtonText}>{t("common.logout")}</Text>
       </TouchableOpacity>
     </ScrollView>
+  );
+
+  const renderSettingsScreen = () => (
+    <SettingsScreen
+      onViewCredits={() => setCurrentScreen("credits")}
+      onLogout={handleLogout}
+    />
+  );
+
+  const renderCreditsScreen = () => (
+    <CreditsScreen onGoBack={() => setCurrentScreen("settings")} />
   );
 
   return (
@@ -584,7 +599,9 @@ export default function LimiterBreakerApp() {
         {currentScreen === "workout" && renderWorkoutScreen()}
         {currentScreen === "ranking" && renderRankingScreen()}
         {currentScreen === "friends" && renderFriendsScreen()}
-        <BottomNav currentScreen={currentScreen} setCurrentScreen={setCurrentScreen} />
+        {currentScreen === "settings" && renderSettingsScreen()}
+        {currentScreen === "credits" && renderCreditsScreen()}
+        <BottomNav currentScreen={currentScreen} setCurrentScreen={setCurrentScreen} t={t} />
       </View>
     </SafeAreaView>
   );
@@ -609,12 +626,13 @@ function SegmentButton({ active, label, onPress, small }: { active: boolean; lab
   );
 }
 
-function BottomNav({ currentScreen, setCurrentScreen }: { currentScreen: Screen; setCurrentScreen: (screen: Screen) => void }) {
+function BottomNav({ currentScreen, setCurrentScreen, t }: { currentScreen: Screen; setCurrentScreen: (screen: Screen) => void; t: (key: string) => string }) {
   const items: { screen: Screen; label: string; icon: string }[] = [
-    { screen: "home", label: "Home", icon: "🏠" },
-    { screen: "workout", label: "Workout", icon: "🏋️" },
-    { screen: "ranking", label: "Ranking", icon: "🏆" },
-    { screen: "friends", label: "Friends", icon: "👥" },
+    { screen: "home", label: t("navigation.home"), icon: "🏠" },
+    { screen: "workout", label: t("navigation.workout"), icon: "🏋️" },
+    { screen: "ranking", label: t("navigation.ranking"), icon: "🏆" },
+    { screen: "friends", label: t("navigation.friends"), icon: "👥" },
+    { screen: "settings", label: t("navigation.settings"), icon: "⚙️" },
   ];
 
   return (
